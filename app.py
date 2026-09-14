@@ -94,6 +94,7 @@ with col_logo:
 with col_titulo:
     st.markdown('<div class="main-header">Farmacia del Pueblo</div>', unsafe_allow_html=True)
     st.markdown('<div class="sub-header">Gestor de Promociones | Cruce de listas con Stock local</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size: 13px; font-weight: 500; color: #5B6598; margin-top: -15px; margin-bottom: 20px;">Creado por: Farm. Leandro Leidi</div>', unsafe_allow_html=True)
 
 # Pestañas
 tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Marketing"])
