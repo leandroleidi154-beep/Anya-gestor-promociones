@@ -1,5 +1,5 @@
 streamlit
 pandas
 openpyxl
-xlrd
-odfpy
+lxml
+html5lib
