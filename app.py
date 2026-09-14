@@ -247,17 +247,20 @@ with tab_marketing:
     st.info("ℹ️ La aplicación lee las promociones por defecto directamente desde la carpeta de Google Drive.")
     st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")
 
-# Marca de agua fija en el extremo inferior derecho
+# Marca de agua con fondo sólido que cubre el ícono flotante de Streamlit Cloud
 st.markdown("""
     <div style="
         position: fixed;
-        bottom: 15px;
-        right: 20px;
-        opacity: 0.6;
+        bottom: 0px;
+        right: 0px;
+        padding: 8px 16px;
+        background-color: #0e1117;
+        opacity: 0.9;
         font-size: 13px;
         font-weight: 500;
         color: #888888;
-        z-index: 9999;
+        z-index: 9999999;
+        border-top-left-radius: 8px;
         pointer-events: none;
     ">
         Creado por: Farm. Leandro Leidi
