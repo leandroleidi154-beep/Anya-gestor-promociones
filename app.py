@@ -21,8 +21,8 @@ def obtener_ruta_imagen(nombre_buscado):
     if not os.path.exists(CARPETA_RECURSOS):
         return None
     for archivo in os.listdir(CARPETA_RECURSOS):
-        nombre_sin_ext, ext = os.path.splitext(archivo)
-        if nombre_sin_ext.lower() == nombre_buscado.lower() and ext.lower() in ['.jpg', '.jpeg', '.png', '.webp']:
+        nombre_sin_ext, _ = os.path.splitext(archivo)
+        if nombre_sin_ext.lower().startswith(nombre_buscado.lower()):
             return os.path.join(CARPETA_RECURSOS, archivo)
     return None
 
