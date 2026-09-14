@@ -257,9 +257,11 @@ with tab_sucursal:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
 
-                        if os.path.exists(ruta_stock_temp):
-                            os.remove(ruta_stock_temp)
-
+              if os.path.exists(ruta_stock_temp):
+        try:
+            os.remove(ruta_stock_temp)
+        except Exception:
+            pass
 # ============================================================
 # PESTAÑA 2: INFORMACIÓN DE MARKETING
 # ============================================================
