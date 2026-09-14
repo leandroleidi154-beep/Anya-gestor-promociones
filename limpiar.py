@@ -14,18 +14,9 @@ MESES_ESPAÑOL = {
 def limpiar_codigo(codigo):
     if pd.isna(codigo):
         return ""
-
-    codigo = str(codigo).strip()
-
-    if codigo.endswith(".0"):
-        codigo = codigo[:-2]
-
-    # A veces Excel guarda el mismo código de barras con un 0 adelante
-    # en un archivo, y sin ese 0 en el otro (lo "come" al tratarlo como
-    # número). Sacamos los ceros a la izquierda para que ambos lados
-    # queden iguales y se puedan cruzar bien.
+    # Remueve espacios, guiones y caracteres no numéricos
+    codigo = re.sub(r"\D", "", str(codigo))
     codigo_sin_ceros = codigo.lstrip("0")
-
     return codigo_sin_ceros if codigo_sin_ceros else codigo
 
 def limpiar_precio(precio):

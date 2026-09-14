@@ -54,48 +54,86 @@ def calcular_estado(fecha_inicio_texto, fecha_fin_texto):
     return "VIGENTE"
 
 
+def _parsear_fecha_dd_mm_aaaa(texto):
+    """
+    Intenta convertir un texto "dd/mm/aaaa" a fecha real. Si el texto
+    no tiene ese formato (por ejemplo "hasta agotar stock"), devuelve
+    None en vez de romper, para que esas promociones no se pierdan
+    al filtrar por período.
+    """
+    if not texto:
+        return None
+
+    try:
+        return datetime.strptime(str(texto).strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def filtrar_por_periodo(promociones, fecha_desde=None, fecha_hasta=None):
+    """
+    Se queda solo con las promociones cuyo período (Inicio-Fin) se
+    superpone con el rango [fecha_desde, fecha_hasta] elegido por el
+    usuario. Ambos límites son opcionales (se puede filtrar solo con
+    "Desde", solo con "Hasta", o con los dos).
+
+    Las promociones cuya fecha de Inicio o Fin no se puede interpretar
+    como fecha real (texto libre tipo "hasta agotar stock") se dejan
+    pasar siempre, porque no hay forma de saber si entran o no en el
+    rango.
+    """
+
+    if fecha_desde is None and fecha_hasta is None:
+        return promociones
+
+    def cumple(fila):
+        fecha_inicio = _parsear_fecha_dd_mm_aaaa(fila.get("Inicio"))
+        fecha_fin = _parsear_fecha_dd_mm_aaaa(fila.get("Fin"))
+
+        if fecha_hasta is not None and fecha_inicio is not None and fecha_inicio > fecha_hasta:
+            return False
+
+        if fecha_desde is not None and fecha_fin is not None and fecha_fin < fecha_desde:
+            return False
+
+        return True
+
+    return promociones[promociones.apply(cumple, axis=1)]
+
+
 def cruzar_promociones_stock(promociones, stock):
+    if promociones.empty or stock.empty:
+        return pd.DataFrame()
 
-    resultados = []
+    # Cruce directo vectorizado O(N + M)
+    resultado = pd.merge(
+        promociones,
+        stock,
+        on="Código de Barras",
+        suffixes=("_promo", "_stock")
+    )
 
-    for _, promocion in promociones.iterrows():
+    if resultado.empty:
+        return pd.DataFrame()
 
-        codigo_promocion = promocion["Código de Barras"]
+    # Asignación de descripción y cálculo de estado
+    resultado["Descripción"] = resultado["Descripción_stock"]
+    resultado["Estado"] = resultado.apply(
+        lambda row: calcular_estado(row["Inicio"], row["Fin"]), axis=1
+    )
 
-        coincidencias = stock[
-            stock["Código de Barras"] == codigo_promocion
-        ]
+    # Identificación de duplicados
+    conteo_por_codigo = resultado["Código de Barras"].value_counts()
+    if (conteo_por_codigo > 1).any():
+        resultado["Revisar duplicado"] = resultado["Código de Barras"].apply(
+            lambda c: "SI" if conteo_por_codigo[c] > 1 else ""
+        )
 
-        for _, producto in coincidencias.iterrows():
+    columnas_finales = [
+        "Código de Barras", "Descripción", "Linea", "Proveedor",
+        "Hoja", "DTO", "Precio de Venta", "Inicio", "Fin", "Estado", "Stock"
+    ]
+    if "Revisar duplicado" in resultado.columns:
+        columnas_finales.append("Revisar duplicado")
 
-            resultados.append({
-                "Código de Barras": codigo_promocion,
-                "Descripción": producto["Descripción"],
-                "Linea": promocion.get("Linea", ""),
-                "Proveedor": promocion.get("Proveedor", ""),
-                "DTO": promocion["DTO"],
-                "Precio de Venta": producto["Precio de Venta"],
-                "Inicio": promocion["Inicio"],
-                "Fin": promocion["Fin"],
-                "Estado": calcular_estado(promocion["Inicio"], promocion["Fin"]),
-                "Stock": producto["Stock"],
-            })
-
-    resultado = pd.DataFrame(resultados)
-
-    if not resultado.empty:
-
-        # Si el mismo código de barras aparece más de una vez
-        # (por ejemplo, promocionado en dos hojas distintas),
-        # lo marcamos para que se revise a mano.
-        # Esta columna solo se agrega si realmente hay algún duplicado.
-        conteo_por_codigo = resultado["Código de Barras"].value_counts()
-
-        hay_duplicados = (conteo_por_codigo > 1).any()
-
-        if hay_duplicados:
-            resultado["Revisar duplicado"] = resultado["Código de Barras"].apply(
-                lambda codigo: "SI" if conteo_por_codigo[codigo] > 1 else ""
-            )
-
-    return resultado
+    return resultado[columnas_finales]

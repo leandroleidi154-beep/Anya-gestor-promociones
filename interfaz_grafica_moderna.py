@@ -15,6 +15,7 @@ anterior no necesitaba:
 import os
 import sys
 import traceback
+from datetime import datetime
 
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
@@ -22,7 +23,7 @@ from PIL import Image
 
 from leer_promociones import leer_promociones
 from leer_stock import leer_stock
-from cruzar import cruzar_promociones_stock
+from cruzar import cruzar_promociones_stock, filtrar_por_periodo
 from formato import generar_excel
 
 
@@ -142,6 +143,14 @@ class VentanaFiltro(ctk.CTkToplevel):
         self.resultado_filtrado = None
         self.casillas = {}
 
+        # Filtro de período: es independiente de las 4 opciones de
+        # arriba (Todas/Proveedor/Línea/Hoja) y se puede combinar con
+        # cualquiera de ellas. Se guarda acá (y no solo en un widget)
+        # para que no se pierda si el usuario pasa al paso 2 y vuelve.
+        self.usar_periodo = ctk.BooleanVar(value=False)
+        self.texto_desde = ctk.StringVar(value="")
+        self.texto_hasta = ctk.StringVar(value="")
+
         self.title("Filtrar promociones")
         self.geometry("640x520")
         self.resizable(False, False)
@@ -247,12 +256,116 @@ class VentanaFiltro(ctk.CTkToplevel):
         )
         boton_hoja.pack(fill="x", pady=8)
 
+        self.armar_bloque_periodo(columna_botones)
+
+    def armar_bloque_periodo(self, padre):
+        """
+        Casillero "Filtrar por período", destildado por defecto, con
+        dos campos opcionales (Desde/Hasta). Es independiente de las
+        4 opciones de arriba: se puede combinar con "Mostrar todas",
+        con "Proveedor", con "Línea" o con "Hoja".
+        """
+
+        marco = ctk.CTkFrame(padre, fg_color="#F5F5F5", corner_radius=10)
+        marco.pack(fill="x", pady=(14, 0))
+
+        casillero = ctk.CTkCheckBox(
+            marco,
+            text="Filtrar por período (fecha de la promoción)",
+            variable=self.usar_periodo,
+            font=ctk.CTkFont(family="Segoe UI", size=12, weight="bold"),
+            fg_color=AZUL,
+            hover_color=AZUL_CLARO,
+            text_color=AZUL
+        )
+        casillero.pack(anchor="w", padx=12, pady=(10, 6))
+
+        fila_fechas = ctk.CTkFrame(marco, fg_color="#F5F5F5")
+        fila_fechas.pack(fill="x", padx=12, pady=(0, 12))
+
+        etiqueta_desde = ctk.CTkLabel(
+            fila_fechas, text="Desde:",
+            font=ctk.CTkFont(family="Segoe UI", size=12), text_color=GRIS_TEXTO
+        )
+        etiqueta_desde.pack(side="left")
+
+        campo_desde = ctk.CTkEntry(
+            fila_fechas, textvariable=self.texto_desde,
+            placeholder_text="dd/mm/aaaa", width=100, height=30
+        )
+        campo_desde.pack(side="left", padx=(6, 16))
+
+        etiqueta_hasta = ctk.CTkLabel(
+            fila_fechas, text="Hasta:",
+            font=ctk.CTkFont(family="Segoe UI", size=12), text_color=GRIS_TEXTO
+        )
+        etiqueta_hasta.pack(side="left")
+
+        campo_hasta = ctk.CTkEntry(
+            fila_fechas, textvariable=self.texto_hasta,
+            placeholder_text="dd/mm/aaaa", width=100, height=30
+        )
+        campo_hasta.pack(side="left", padx=(6, 0))
+
     # ============================================================
-    # "MOSTRAR TODAS": no filtra nada
+    # FILTRO DE PERÍODO (combinable con cualquiera de las 4 opciones)
+    # ============================================================
+
+    def _validar_y_obtener_periodo(self):
+        """
+        Si el casillero de período está tildado, valida las fechas
+        escritas (si hay alguna) y devuelve una tupla (desde, hasta)
+        con objetos date o None. Si algo está mal escrito, avisa con
+        un cartel y devuelve None para que no se siga adelante.
+        Si el casillero no está tildado, devuelve (None, None) directo
+        (sin filtrar nada por fecha).
+        """
+
+        if not self.usar_periodo.get():
+            return (None, None)
+
+        texto_desde = self.texto_desde.get().strip()
+        texto_hasta = self.texto_hasta.get().strip()
+
+        fecha_desde = None
+        fecha_hasta = None
+
+        if texto_desde:
+            try:
+                fecha_desde = datetime.strptime(texto_desde, "%d/%m/%Y").date()
+            except ValueError:
+                messagebox.showwarning(
+                    "Fecha inválida",
+                    "La fecha 'Desde' tiene que tener el formato dd/mm/aaaa."
+                )
+                return None
+
+        if texto_hasta:
+            try:
+                fecha_hasta = datetime.strptime(texto_hasta, "%d/%m/%Y").date()
+            except ValueError:
+                messagebox.showwarning(
+                    "Fecha inválida",
+                    "La fecha 'Hasta' tiene que tener el formato dd/mm/aaaa."
+                )
+                return None
+
+        return (fecha_desde, fecha_hasta)
+
+    # ============================================================
+    # "MOSTRAR TODAS": no filtra nada (salvo el período, si está tildado)
     # ============================================================
 
     def elegir_todas(self):
-        self.resultado_filtrado = self.resultado_original
+
+        periodo = self._validar_y_obtener_periodo()
+        if periodo is None:
+            return
+
+        fecha_desde, fecha_hasta = periodo
+        self.resultado_filtrado = filtrar_por_periodo(
+            self.resultado_original, fecha_desde, fecha_hasta
+        )
         self.destroy()
 
     # ============================================================
@@ -437,15 +550,154 @@ class VentanaFiltro(ctk.CTkToplevel):
             )
             return
 
-        self.resultado_filtrado = self.resultado_original[
+        periodo = self._validar_y_obtener_periodo()
+        if periodo is None:
+            return
+
+        filtrado = self.resultado_original[
             self.resultado_original[columna]
             .apply(lambda valor: str(valor).strip())
             .isin(seleccionados)
         ]
+
+        fecha_desde, fecha_hasta = periodo
+        self.resultado_filtrado = filtrar_por_periodo(filtrado, fecha_desde, fecha_hasta)
         self.destroy()
 
     def cancelar(self):
         self.resultado_filtrado = None
+        self.destroy()
+
+
+class VentanaResumenControl(ctk.CTkToplevel):
+    """
+    Ventana que aparece después de cruzar los datos y ANTES de generar
+    el archivo final. Muestra el total de coincidencias encontradas
+    (vencidas, vencen mañana, duplicadas) y le pregunta al usuario si
+    quiere una única hoja "Control" con todo junto, o una hoja
+    "Control" separada por cada hoja del Excel de marketing.
+
+    El resultado queda en self.continuar (True/False) y, si continuó,
+    en self.dividir_control (True = varias hojas, False = una sola).
+    """
+
+    def __init__(self, padre, resultado):
+        super().__init__(padre)
+
+        self.continuar = False
+        self.dividir_control = False
+
+        self.title("Coincidencias encontradas")
+        self.resizable(False, False)
+        self.configure(fg_color=BLANCO)
+
+        self.transient(padre)
+        self.grab_set()
+        self.protocol("WM_DELETE_WINDOW", self.cancelar)
+
+        self.opcion_control = ctk.StringVar(value="unica")
+
+        contenedor = ctk.CTkFrame(self, fg_color=BLANCO)
+        contenedor.pack(fill="both", expand=True, padx=25, pady=25)
+
+        titulo = ctk.CTkLabel(
+            contenedor,
+            text="Coincidencias encontradas",
+            font=ctk.CTkFont(family="Segoe UI", size=16, weight="bold"),
+            text_color=AZUL
+        )
+        titulo.pack(pady=(0, 15))
+
+        cantidad_vencidas = (resultado["Estado"] == "VENCIDA").sum() if "Estado" in resultado.columns else 0
+        cantidad_vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum() if "Estado" in resultado.columns else 0
+        cantidad_duplicados = (resultado["Revisar duplicado"] == "SI").sum() if "Revisar duplicado" in resultado.columns else 0
+
+        texto_resumen = (
+            f"Se encontraron {len(resultado)} promociones para productos en stock.\n\n"
+            f"Vencidas: {cantidad_vencidas}\n"
+            f"Vencen mañana: {cantidad_vence_manana}\n"
+            f"Para revisar (duplicadas): {cantidad_duplicados}"
+        )
+
+        etiqueta_resumen = ctk.CTkLabel(
+            contenedor,
+            text=texto_resumen,
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            text_color="#444444",
+            justify="left"
+        )
+        etiqueta_resumen.pack(fill="x", pady=(0, 20))
+
+        subtitulo = ctk.CTkLabel(
+            contenedor,
+            text="¿Cómo querés armar la hoja de Control (la que se imprime)?",
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            text_color=AZUL,
+            justify="left",
+            wraplength=380
+        )
+        subtitulo.pack(fill="x", pady=(0, 10))
+
+        opcion_unica = ctk.CTkRadioButton(
+            contenedor,
+            text="Una sola hoja de Control, con todas las promociones juntas",
+            variable=self.opcion_control,
+            value="unica",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            fg_color=AZUL,
+            hover_color=AZUL_CLARO
+        )
+        opcion_unica.pack(anchor="w", pady=4)
+
+        opcion_dividida = ctk.CTkRadioButton(
+            contenedor,
+            text="Varias hojas de Control, una por cada hoja del Excel de marketing",
+            variable=self.opcion_control,
+            value="dividida",
+            font=ctk.CTkFont(family="Segoe UI", size=12),
+            fg_color=AZUL,
+            hover_color=AZUL_CLARO
+        )
+        opcion_dividida.pack(anchor="w", pady=4)
+
+        fila_botones = ctk.CTkFrame(contenedor, fg_color=BLANCO)
+        fila_botones.pack(fill="x", pady=(20, 0))
+
+        boton_cancelar = ctk.CTkButton(
+            fila_botones,
+            text="Cancelar",
+            width=100,
+            height=36,
+            fg_color="#E8E8E8",
+            text_color=AZUL,
+            hover_color="#D5D5D5",
+            command=self.cancelar
+        )
+        boton_cancelar.pack(side="left")
+
+        boton_continuar = ctk.CTkButton(
+            fila_botones,
+            text="Continuar",
+            height=36,
+            fg_color=AZUL,
+            hover_color=AZUL_CLARO,
+            font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
+            command=self.confirmar
+        )
+        boton_continuar.pack(side="right", fill="x", expand=True, padx=(10, 0))
+
+        self.update_idletasks()
+        ancho = max(440, contenedor.winfo_reqwidth() + 50)
+        alto = contenedor.winfo_reqheight() + 50
+        self.geometry(f"{ancho}x{alto}")
+
+    def confirmar(self):
+        self.continuar = True
+        self.dividir_control = (self.opcion_control.get() == "dividida")
+        self.destroy()
+
+    def cancelar(self):
+        self.continuar = False
         self.destroy()
 
 
@@ -687,11 +939,24 @@ class Aplicacion(ctk.CTk):
                     self,
                     "Sin coincidencias",
                     "No se encontró ningún producto en stock para lo que elegiste.\n\n"
-                    "Puede que esa línea o proveedor no tenga productos cargados en el stock.",
+                    "Puede que esa línea o proveedor no tenga productos cargados en el stock."
+                    "\n\nSi tildaste el filtro por período, puede que no haya promociones "
+                    "en ese rango de fechas.",
                     "error.jpg"
                 )
                 self.wait_window(aviso)
                 return
+
+            # Antes de generar el archivo, mostramos el total de
+            # coincidencias y preguntamos cómo armar la hoja de Control.
+            ventana_resumen = VentanaResumenControl(self, resultado)
+            self.wait_window(ventana_resumen)
+
+            if not ventana_resumen.continuar:
+                self.actualizar_estado("Operación cancelada.")
+                return
+
+            dividir_control = ventana_resumen.dividir_control
 
             archivo_salida = filedialog.asksaveasfilename(
                 title="Guardar reporte de promociones como...",
@@ -704,32 +969,15 @@ class Aplicacion(ctk.CTk):
                 self.actualizar_estado("Operación cancelada: no se eligió dónde guardar.")
                 return
 
-            generar_excel(resultado, archivo_salida)
+            generar_excel(resultado, archivo_salida, dividir_control=dividir_control)
 
-            carpeta_destino = os.path.dirname(archivo_salida) or "."
-
-            cantidad_vencidas = 0
-            if "Estado" in resultado.columns:
-                cantidad_vencidas = (resultado["Estado"] == "VENCIDA").sum()
-
-            cantidad_vence_manana = 0
-            if "Estado" in resultado.columns:
-                cantidad_vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum()
-
-            cantidad_duplicados = 0
-            if "Revisar duplicado" in resultado.columns:
-                cantidad_duplicados = (resultado["Revisar duplicado"] == "SI").sum()
-
-            mensaje = (
-                f"Se generaron {len(resultado)} promociones para productos en stock.\n\n"
-                f"Vencidas: {cantidad_vencidas}\n"
-                f"Vencen mañana: {cantidad_vence_manana}\n"
-                f"Para revisar (duplicadas): {cantidad_duplicados}\n\n"
-                f"Archivo guardado en:\n{archivo_salida}"
+            self.actualizar_estado(f"Listo. Archivo guardado en {archivo_salida}")
+            aviso = VentanaAviso(
+                self,
+                "Reporte generado",
+                f"El archivo se generó correctamente.\n\nGuardado en:\n{archivo_salida}",
+                "exito.jpg"
             )
-
-            self.actualizar_estado("Listo. " + mensaje.splitlines()[0])
-            aviso = VentanaAviso(self, "Reporte generado", mensaje, "exito.jpg")
             self.wait_window(aviso)
 
             self.abrir_archivo(archivo_salida)
