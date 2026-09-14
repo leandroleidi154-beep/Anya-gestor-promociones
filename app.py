@@ -227,23 +227,24 @@ with tab_sucursal:
                     
 
         # --- GENERACIÓN DEL EXCEL CON FORMATO Y HOJA DE CONTROL ---
-        buffer = io.BytesIO()
+        output = io.BytesIO()
         
         # Determina si el usuario eligió separar hojas
         dividir_flag = (opcion_control == "dividida") if 'opcion_control' in locals() else False
         
         # Genera el Excel aplicando todas las reglas de formato.py (incluye Stock)
-        generar_excel(df_cruce, buffer, dividir_control=dividir_flag)
+        generar_excel(resultado, output, dividir_control=dividir_flag)
         
         # Rebobina el buffer para habilitar la descarga
-        buffer.seek(0)
+        bytes_excel = output.getvalue()
 
         # Botón para descargar el reporte final
         st.download_button(
-            label="📥 Descargar Reporte Excel",
-            data=buffer,
-            file_name="Reporte_Promociones.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            label="📥 Descargar Reporte en Excel (.xlsx)",
+            data=bytes_excel,
+            file_name="Promociones_en_Stock.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
         )
 
         if os.path.exists(ruta_stock_temp):
