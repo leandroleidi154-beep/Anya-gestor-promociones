@@ -237,8 +237,28 @@ with tab_sucursal:
                         use_container_width=True
                     )
 
-        if os.path.exists(ruta_stock_temp):
-            os.remove(ruta_stock_temp)
+        # --- GENERACIÓN DEL EXCEL CON FORMATO Y HOJA DE CONTROL ---
+                    buffer = io.BytesIO()
+        
+        # Determina si el usuario eligió separar hojas
+                    dividir_flag = (opcion_control == "dividida") if 'opcion_control' in locals() else False
+        
+        # Genera el Excel aplicando todas las reglas de formato.py (incluye Stock)
+                    generar_excel(df_cruce, buffer, dividir_control=dividir_flag)
+        
+        # Rebobina el buffer para habilitar la descarga
+                    buffer.seek(0)
+
+        # Botón para descargar el reporte final
+                    st.download_button(
+                        label="📥 Descargar Reporte Excel",
+                        data=buffer,
+                        file_name="Reporte_Promociones.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    )
+
+                        if os.path.exists(ruta_stock_temp):
+                            os.remove(ruta_stock_temp)
 
 # ============================================================
 # PESTAÑA 2: INFORMACIÓN DE MARKETING
