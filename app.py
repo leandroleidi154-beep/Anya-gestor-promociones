@@ -185,4 +185,4 @@ with tab_sucursal:
 with tab_marketing:
     st.subheader("Origen de Datos Central")
     st.info("ℹ️ La aplicación lee las promociones directamente desde la carpeta de Google Drive.")
-    st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")e.")
+    st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")
