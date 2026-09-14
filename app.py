@@ -8,7 +8,12 @@ from leer_stock import leer_stock
 from cruzar import cruzar_promociones_stock
 from formato import generar_excel
 
-# Obtener la ruta exacta de la carpeta del proyecto
+# ============================================================
+# CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
+# ============================================================
+# Enlace de descarga directa generado desde tu link compartido:
+URL_GOOGLE_DRIVE = "https://drive.google.com/uc?export=download&id=1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ"
+
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
 
@@ -16,8 +21,8 @@ def obtener_ruta_imagen(nombre_buscado):
     if not os.path.exists(CARPETA_RECURSOS):
         return None
     for archivo in os.listdir(CARPETA_RECURSOS):
-        nombre_sin_ext, _ = os.path.splitext(archivo)
-        if nombre_sin_ext.lower().startswith(nombre_buscado.lower()):
+        nombre_sin_ext, ext = os.path.splitext(archivo)
+        if nombre_sin_ext.lower() == nombre_buscado.lower() and ext.lower() in ['.jpg', '.jpeg', '.png', '.webp']:
             return os.path.join(CARPETA_RECURSOS, archivo)
     return None
 
@@ -51,13 +56,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-CARPETA_DATOS = "datos_servidor"
-RUTA_PROMOS_GUARDADAS = os.path.join(CARPETA_DATOS, "promociones_vigentes.xlsx")
-
-if not os.path.exists(CARPETA_DATOS):
-    os.makedirs(CARPETA_DATOS)
-
-# Encabezado principal con Logo más grande
+# Encabezado principal
 col_logo, col_titulo = st.columns([1.2, 3.8])
 with col_logo:
     if RUTA_LOGO:
@@ -78,30 +77,25 @@ tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Ma
 with tab_sucursal:
     st.subheader("Generar reporte para Sucursal")
     
-    if not os.path.exists(RUTA_PROMOS_GUARDADAS):
-        st.warning("⚠️ El departamento de Marketing aún no ha cargado la lista de promociones centralizada.")
-    else:
-        archivo_stock_subido = st.file_uploader(
-            "1. Cargar archivo de Stock (.xlsx, .xls, .ods)",
-            type=["xlsx", "xls", "ods"],
-            key="uploader_stock"
-        )
+    archivo_stock_subido = st.file_uploader(
+        "1. Cargar archivo de Stock (.xlsx, .xls, .ods)",
+        type=["xlsx", "xls", "ods"],
+        key="uploader_stock"
+    )
+    
+    if archivo_stock_subido is not None:
+        ruta_stock_temp = "temp_stock_sucursal.xlsx"
+        with open(ruta_stock_temp, "wb") as f:
+            f.write(archivo_stock_subido.getbuffer())
         
-        if archivo_stock_subido is not None:
-            ruta_stock_temp = "temp_stock_sucursal.xlsx"
-            with open(ruta_stock_temp, "wb") as f:
-                f.write(archivo_stock_subido.getbuffer())
-            
-            with st.spinner("Cargando base de promociones..."):
-                promociones_df = leer_promociones(RUTA_PROMOS_GUARDADAS)
+        try:
+            with st.spinner("Descargando base de promociones desde Google Drive..."):
+                promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
             
             st.divider()
-            
             st.write("**2. Filtros opcionales**")
             
-            # Imagen pensando A LA IZQUIERDA del menú de filtros
             col_img_filtro, col_txt = st.columns([1, 2.5])
-            
             with col_img_filtro:
                 if RUTA_PENSANDO:
                     st.image(RUTA_PENSANDO, caption="Filtrando...", width=160)
@@ -140,7 +134,6 @@ with tab_sucursal:
                     stock_df = leer_stock(ruta_stock_temp)
                     resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
                 
-                # Caso SIN coincidencias (Gata triste más grande)
                 if resultado.empty:
                     col_triste_txt, col_triste_img = st.columns([2.5, 1])
                     with col_triste_txt:
@@ -148,8 +141,6 @@ with tab_sucursal:
                     with col_triste_img:
                         if RUTA_TRISTE:
                             st.image(RUTA_TRISTE, width=160)
-                
-                # Caso CON coincidencias (Gata de éxito más grande)
                 else:
                     col_exito_txt, col_exito_img = st.columns([2.5, 1])
                     with col_exito_txt:
@@ -182,37 +173,16 @@ with tab_sucursal:
                         use_container_width=True
                     )
 
-            if os.path.exists(ruta_stock_temp):
-                os.remove(ruta_stock_temp)
+        except Exception as e:
+            st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Asegúrese de que el archivo tenga permisos de lectura abiertos. Detalles: {e}")
+
+        if os.path.exists(ruta_stock_temp):
+            os.remove(ruta_stock_temp)
 
 # ============================================================
-# PESTAÑA 2: MARKETING (ADMIN)
+# PESTAÑA 2: INFORMACIÓN DE MARKETING
 # ============================================================
 with tab_marketing:
-    st.subheader("Panel de Carga Central")
-    st.write("Solo personal autorizado del sector Marketing.")
-    
-    clave = st.text_input("Contraseña de acceso:", type="password")
-    
-    if clave == "admin123":
-        st.success("Acceso concedido.")
-        archivo_promos_subido = st.file_uploader(
-            "Cargar lista general de Promociones (Excel)", 
-            type=["xlsx", "xls"],
-            key="uploader_marketing"
-        )
-        
-        if archivo_promos_subido is not None:
-            if st.button("Actualizar Promociones Vigentes"):
-                with open(RUTA_PROMOS_GUARDADAS, "wb") as f:
-                    f.write(archivo_promos_subido.getbuffer())
-                st.balloons()
-                st.success("✅ Archivo central actualizado exitosamente.")
-    elif clave != "":
-        st.error("Contraseña incorrecta.")
-
-    st.divider()
-    if os.path.exists(RUTA_PROMOS_GUARDADAS):
-        st.info("ℹ️ Hay una lista de promociones activa guardada en el servidor.")
-    else:
-        st.warning("⚠️ No hay ninguna lista cargada actualmente.")
+    st.subheader("Origen de Datos Central")
+    st.info("ℹ️ La aplicación lee las promociones directamente desde la carpeta de Google Drive.")
+    st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")e.")
