@@ -10,20 +10,36 @@ COLOR_VENCE_MANANA = "FCE4D6"  # naranja suave
 COLOR_PROXIMAMENTE = "D9E1F2"  # celeste suave
 
 
-def generar_excel(resultado, archivo_salida):
+def generar_excel(resultado, archivo_salida, dividir_control=False):
     """
-    Recibe el DataFrame ya cruzado (resultado) y genera el Excel final
-    con dos hojas:
+    Recibe el DataFrame ya cruzado (resultado) y genera el Excel final.
 
-    1. "Promociones en Stock": el listado completo, para tener todos los datos.
-    2. "Control": pensada para imprimir y que el repositor vaya tildando
-       a medida que coloca cada cartel.
+    Siempre incluye la hoja "Promociones en Stock" (el listado completo,
+    con la marca de "Control"/duplicado si corresponde).
+
+    Para la parte de Control, pensada para imprimir y que el repositor
+    vaya tildando a medida que coloca cada cartel, hay dos modos:
+
+    - dividir_control=False (default): una única hoja "Control" con
+      todas las promociones juntas.
+    - dividir_control=True: una hoja "Control - <nombre>" por cada
+      hoja del Excel de marketing en la que aparecía la promoción
+      (ej. "Control - CVMH", "Control - LAVANDINA LOREAL"). Si un
+      mismo producto tenía promo en más de una hoja de marketing,
+      aparece en cada una de esas hojas de Control.
+
+    En ningún caso las hojas de Control muestran la leyenda de
+    "duplicado": esa marca es solo para la hoja principal.
     """
 
     libro = openpyxl.Workbook()
 
     _armar_hoja_principal(libro, resultado)
-    _armar_hoja_control(libro, resultado)
+
+    if dividir_control:
+        _armar_hojas_control_divididas(libro, resultado)
+    else:
+        _armar_hoja_control(libro, "Control", resultado)
 
     libro.save(archivo_salida)
 
@@ -91,25 +107,34 @@ def _armar_hoja_principal(libro, resultado):
 # HOJA 2: CONTROL (para imprimir y tildar en el local)
 # ============================================================
 
-def _armar_hoja_control(libro, resultado):
+def _armar_hoja_control(libro, nombre_hoja, datos):
+    """
+    Arma una hoja de Control (para imprimir y tildar) con los datos
+    recibidos. Se usa tanto para la hoja única "Control" como para
+    cada una de las hojas divididas por hoja de marketing.
 
-    hoja = libro.create_sheet("Control")
+    Nunca incluye la marca de "duplicado": esa leyenda es exclusiva
+    de la hoja principal "Promociones en Stock".
+    """
+
+    hoja = libro.create_sheet(nombre_hoja)
 
     encabezados = [
-        "Línea", "Descripción", "Código de Barras",
+        "Línea", "Descripción", "Código de Barras", "Stock",
         "Promoción", "Precio de Venta", "Inicio", "Fin", "Vigencia", "Control"
     ]
     hoja.append(encabezados)
 
     # Ordenado por Línea y Descripción, para que sea más fácil
     # recorrer la farmacia por marca/sector.
-    datos_ordenados = resultado.sort_values(["Linea", "Descripción"])
+    datos_ordenados = datos.sort_values(["Linea", "Descripción"])
 
     for _, fila in datos_ordenados.iterrows():
         hoja.append([
             fila["Linea"],
             fila["Descripción"],
             fila["Código de Barras"],
+            fila["Stock"],
             fila["DTO"],
             fila["Precio de Venta"],
             fila["Inicio"],
@@ -120,9 +145,9 @@ def _armar_hoja_control(libro, resultado):
 
     _dar_estilo_encabezado(hoja)
 
-    columna_precio = 5
-    columna_vigencia = 8
-    columna_control = 9
+    columna_precio = 6
+    columna_vigencia = 9
+    columna_control = 10
 
     _resaltar_por_estado(hoja, columna_vigencia)
     _formato_moneda(hoja, columna_precio)
@@ -144,8 +169,8 @@ def _armar_hoja_control(libro, resultado):
         hoja.row_dimensions[fila].height = 20
 
     anchos = {
-        "A": 18, "B": 42, "C": 16, "D": 12,
-        "E": 15, "F": 13, "G": 13, "H": 14, "I": 12
+        "A": 18, "B": 42, "C": 16, "D": 8,
+        "E": 12, "F": 15, "G": 13, "H": 13, "I": 14, "J": 12
     }
     for letra, ancho in anchos.items():
         hoja.column_dimensions[letra].width = ancho
@@ -153,6 +178,61 @@ def _armar_hoja_control(libro, resultado):
     hoja.freeze_panes = "A2"
 
     _configurar_impresion(hoja)
+
+
+# Caracteres que Excel no permite en un nombre de hoja.
+_CARACTERES_INVALIDOS_NOMBRE_HOJA = ["\\", "/", "*", "[", "]", ":", "?"]
+
+
+def _nombre_hoja_control(nombre_hoja_marketing, nombres_ya_usados):
+    """
+    Arma el nombre "Control - <hoja de marketing>", sacando caracteres
+    que Excel no permite en un nombre de hoja y respetando el límite
+    de 31 caracteres. Si dos hojas de marketing generan el mismo
+    nombre recortado, le agrega un número al final para no pisarlas.
+    """
+
+    nombre_base = str(nombre_hoja_marketing).strip() or "Sin nombre"
+
+    for caracter in _CARACTERES_INVALIDOS_NOMBRE_HOJA:
+        nombre_base = nombre_base.replace(caracter, "")
+
+    nombre = f"Control - {nombre_base}"[:31]
+
+    nombre_final = nombre
+    contador = 2
+    while nombre_final in nombres_ya_usados:
+        sufijo = f" ({contador})"
+        nombre_final = nombre[:31 - len(sufijo)] + sufijo
+        contador += 1
+
+    nombres_ya_usados.add(nombre_final)
+    return nombre_final
+
+
+def _armar_hojas_control_divididas(libro, resultado):
+    """
+    Genera una hoja "Control - <hoja de marketing>" por cada hoja del
+    Excel de marketing que tuvo coincidencias en stock. Si un mismo
+    producto tenía promoción en más de una hoja de marketing (caso de
+    "duplicado"), aparece en cada una de esas hojas de Control.
+    """
+
+    nombres_ya_usados = set()
+
+    hojas_marketing = sorted(
+        resultado["Hoja"].dropna().unique(),
+        key=lambda valor: str(valor).lower()
+    )
+
+    for hoja_marketing in hojas_marketing:
+        datos_de_esta_hoja = resultado[resultado["Hoja"] == hoja_marketing]
+
+        if datos_de_esta_hoja.empty:
+            continue
+
+        nombre_hoja_excel = _nombre_hoja_control(hoja_marketing, nombres_ya_usados)
+        _armar_hoja_control(libro, nombre_hoja_excel, datos_de_esta_hoja)
 
 
 # ============================================================
