@@ -37,9 +37,29 @@ st.set_page_config(
     layout="centered"
 )
 
-# Estilos CSS
+# Estilos CSS avanzados para ocultar la interfaz por defecto de Streamlit
 st.markdown("""
     <style>
+    /* Ocultar la barra superior (Header), botón Fork, GitHub y menú de 3 puntos */
+    [data-testid="stHeader"] {
+        display: none !important;
+    }
+    
+    /* Ocultar el pie de página por defecto de Streamlit */
+    footer {
+        display: none !important;
+    }
+    
+    /* Ocultar el botón flotante del desarrollador / marca de agua inferior */
+    [data-testid="stStatusWidget"] {
+        display: none !important;
+    }
+    
+    .stAppToolbar {
+        display: none !important;
+    }
+
+    /* Estilos del encabezado principal */
     .main-header { font-size: 28px; font-weight: bold; color: #39476A; }
     .sub-header { font-size: 15px; color: #888888; margin-bottom: 20px; }
     div.stButton > button:first-child {
@@ -218,3 +238,20 @@ with tab_marketing:
     st.subheader("Origen de Datos Central")
     st.info("ℹ️ La aplicación lee las promociones por defecto directamente desde la carpeta de Google Drive.")
     st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")
+
+# Marca de agua fija en el extremo inferior derecho
+st.markdown("""
+    <div style="
+        position: fixed;
+        bottom: 15px;
+        right: 20px;
+        opacity: 0.6;
+        font-size: 13px;
+        font-weight: 500;
+        color: #888888;
+        z-index: 9999;
+        pointer-events: none;
+    ">
+        Creado por: Farm. Leandro Leidi
+    </div>
+""", unsafe_allow_html=True)
