@@ -68,7 +68,7 @@ with col_titulo:
     st.markdown('<div class="sub-header">Gestor de Promociones | Cruce de listas con Stock local</div>', unsafe_allow_html=True)
 
 # Pestañas
-tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Marketing (Admin)"])
+tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Marketing"])
 
 # ============================================================
 # PESTAÑA 1: SUCURSALES
