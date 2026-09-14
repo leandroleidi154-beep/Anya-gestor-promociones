@@ -11,7 +11,6 @@ from formato import generar_excel
 # ============================================================
 # CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
 # ============================================================
-# Enlace de descarga directa generado desde tu link compartido:
 URL_GOOGLE_DRIVE = "https://drive.google.com/uc?export=download&id=1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
@@ -88,12 +87,48 @@ with tab_sucursal:
         with open(ruta_stock_temp, "wb") as f:
             f.write(archivo_stock_subido.getbuffer())
         
-        try:
-            with st.spinner("Descargando base de promociones desde Google Drive..."):
-                promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
-            
+        st.divider()
+        st.subheader("2. Selección de Promociones")
+        
+        # Opción para usar promociones alternativas en la sesión local
+        usar_promos_personalizadas = st.checkbox(
+            "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
+            value=False
+        )
+        
+        promociones_df = None
+        
+        if usar_promos_personalizadas:
+            archivo_promos_subido = st.file_uploader(
+                "Cargar lista de promociones propia (.xlsx, .xls, .ods)",
+                type=["xlsx", "xls", "ods"],
+                key="uploader_promos_custom"
+            )
+            if archivo_promos_subido is not None:
+                ruta_promos_temp = "temp_promos_custom.xlsx"
+                with open(ruta_promos_temp, "wb") as f:
+                    f.write(archivo_promos_subido.getbuffer())
+                try:
+                    promociones_df = leer_promociones(ruta_promos_temp)
+                    st.info("ℹ️ Usando la lista de promociones subida manualmente.")
+                except Exception as e:
+                    st.error(f"Error al leer el archivo de promociones subido: {e}")
+                finally:
+                    if os.path.exists(ruta_promos_temp):
+                        os.remove(ruta_promos_temp)
+            else:
+                st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
+        else:
+            try:
+                with st.spinner("Descargando base de promociones general desde Google Drive..."):
+                    promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
+            except Exception as e:
+                st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
+
+        # Si tenemos un dataframe de promociones válido (sea de Drive o personalizado)
+        if promociones_df is not None and not promociones_df.empty:
             st.divider()
-            st.write("**2. Filtros opcionales**")
+            st.write("**3. Filtros opcionales**")
             
             col_img_filtro, col_txt = st.columns([1, 2.5])
             with col_img_filtro:
@@ -173,9 +208,6 @@ with tab_sucursal:
                         use_container_width=True
                     )
 
-        except Exception as e:
-            st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Asegúrese de que el archivo tenga permisos de lectura abiertos. Detalles: {e}")
-
         if os.path.exists(ruta_stock_temp):
             os.remove(ruta_stock_temp)
 
@@ -184,5 +216,5 @@ with tab_sucursal:
 # ============================================================
 with tab_marketing:
     st.subheader("Origen de Datos Central")
-    st.info("ℹ️ La aplicación lee las promociones directamente desde la carpeta de Google Drive.")
+    st.info("ℹ️ La aplicación lee las promociones por defecto directamente desde la carpeta de Google Drive.")
     st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")
