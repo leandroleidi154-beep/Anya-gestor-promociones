@@ -40,21 +40,25 @@ st.set_page_config(
 # Estilos CSS avanzados para ocultar la interfaz por defecto de Streamlit
 st.markdown("""
     <style>
-    /* Ocultar header, botones de GitHub, Fork y menú de 3 puntos */
-    [data-testid="stHeader"] {
+    /* Ocultar barra superior (Header), botones de GitHub, Fork y menú de 3 puntos */
+    [data-testid="stHeader"],
+    header,
+    .stAppHeader {
         display: none !important;
     }
     
-    /* Ocultar footer por defecto */
+    /* Ocultar pie de página por defecto */
     footer {
         display: none !important;
     }
     
-    /* Ocultar el widget de estado / ícono flotante del perfil/servidor en la esquina inferior */
+    /* Ocultar el botón rojo/blanco inferior de Streamlit Cloud y estado */
     [data-testid="stStatusWidget"],
+    [data-testid="stViewerBadge"],
     .stStatusWidget,
+    #stDecoration,
     [data-testid="stDecoration"],
-    #stDecoration {
+    div[class*="viewerBadge"] {
         display: none !important;
         visibility: hidden !important;
     }
