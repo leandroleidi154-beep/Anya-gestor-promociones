@@ -225,17 +225,6 @@ with tab_sucursal:
                         if RUTA_EXITO:
                             st.image(RUTA_EXITO, caption="¡Promos encontradas!", width=160)
                     
-                    output = io.BytesIO()
-                    generar_excel(resultado, output)
-                    bytes_excel = output.getvalue()
-                    
-                    st.download_button(
-                        label="📥 Descargar Reporte en Excel (.xlsx)",
-                        data=bytes_excel,
-                        file_name="Promociones_en_Stock.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
 
         # --- GENERACIÓN DEL EXCEL CON FORMATO Y HOJA DE CONTROL ---
         buffer = io.BytesIO()
