@@ -156,7 +156,7 @@ elif tipo_filtro == "Filtrar por Hoja":
         promociones_filtradas = promociones_df[promociones_df["Hoja"].astype(str).isin(sel)]
 
         st.divider()
-            st.write("**3. Filtros opcionales**")
+        st.write("**3. Filtros opcionales**")
             
             col_img_filtro, col_txt = st.columns([1, 2.5])
             with col_img_filtro:
