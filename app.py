@@ -158,17 +158,17 @@ elif tipo_filtro == "Filtrar por Hoja":
         st.divider()
         st.write("**3. Filtros opcionales**")
             
-            col_img_filtro, col_txt = st.columns([1, 2.5])
-            with col_img_filtro:
-                if RUTA_PENSANDO:
-                    st.image(RUTA_PENSANDO, caption="Filtrando...", width=160)
+        col_img_filtro, col_txt = st.columns([1, 2.5])
+        with col_img_filtro:
+            if RUTA_PENSANDO:
+                st.image(RUTA_PENSANDO, caption="Filtrando...", width=160)
             
-            with col_txt:
-                tipo_filtro = st.radio(
-                    "¿Cómo querés filtrar las promociones?",
-                    ["Mostrar todas", "Filtrar por Proveedor", "Filtrar por Línea", "Filtrar por Hoja"],
-                    horizontal=False
-                )
+        with col_txt:
+            tipo_filtro = st.radio(
+                "¿Cómo querés filtrar las promociones?",
+                ["Mostrar todas", "Filtrar por Proveedor", "Filtrar por Línea", "Filtrar por Hoja"],
+                horizontal=False
+            )
             
             promociones_filtradas = promociones_df.copy()
             
