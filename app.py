@@ -19,7 +19,7 @@ RUTA_EXITO = "imagenes/exito.jpg" if os.path.exists("imagenes/exito.jpg") else N
 RUTA_TRISTE = "imagenes/triste.jpg" if os.path.exists("imagenes/triste.jpg") else None
 
 # Enlace de Google Drive con las promociones centralizadas
-URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ/export?format=xlsx""
+URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ/export?format=xlsx"
 
 st.title("🐾 Anya - Gestor de Promociones")
 st.write("Sube el stock de tu sucursal para cruzarlo con el archivo de promociones central de Marketing.")
