@@ -10,5 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Visitar la aplicación en Streamlit
-        run: |
-          curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --max-time 15 "https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app" || true
+        run: curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --max-time 15 "https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app/" || true
