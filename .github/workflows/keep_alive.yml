@@ -2,26 +2,14 @@ name: Mantener Streamlit Despierto
 
 on:
   schedule:
-    # Se ejecuta cada 6 horas (ajusta según tus necesidades)
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # Permite probarlo manualmente desde GitHub
+    # Se ejecuta cada 4 horas
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Permite probarlo manualmente con un botón
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del repositorio
-        uses: actions/checkout@v3
-
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.x'
-
-      - name: Instalar dependencias
+      - name: Hacer petición HTTP a la app
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
-
-      - name: Ejecutar script keep_alive
-        run: python keep_alive.py
+          curl -s -L --max-time 30 "https://tu-app-de-anya.streamlit.app" || exit 0
