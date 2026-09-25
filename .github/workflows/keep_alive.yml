@@ -12,4 +12,4 @@ jobs:
     steps:
       - name: Hacer petición HTTP a la app
         run: |
-          curl -s -L --max-time 30 "https://tu-app-de-anya.streamlit.app" || exit 0
+          curl -s -L --max-time 30 "https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app" || exit 0
