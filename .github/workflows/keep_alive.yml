@@ -9,5 +9,11 @@ jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Visitar la aplicación en Streamlit
-        run: curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --max-time 15 "https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app/" || true
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Enviar visita
+        run: |
+          python -c "import urllib.request; urllib.request.urlopen('https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app/')" || true
