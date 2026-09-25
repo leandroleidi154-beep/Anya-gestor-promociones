@@ -2,14 +2,13 @@ name: Mantener Streamlit Despierto
 
 on:
   schedule:
-    # Se ejecuta cada 4 horas
     - cron: '0 */4 * * *'
-  workflow_dispatch: # Permite probarlo manualmente con un botón
+  workflow_dispatch:
 
 jobs:
   keep-alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Hacer petición HTTP a la app
+      - name: Visitar la aplicación en Streamlit
         run: |
-          curl -s -L --max-time 30 "https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app" || exit 0
+          curl -s -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" --max-time 15 "https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app" || true
