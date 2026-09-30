@@ -128,20 +128,26 @@ with tab_sucursal:
                         os.remove(ruta_promos_temp)
             else:
                 st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
-        else:
+else:
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    res = requests.get(URL_GOOGLE_DRIVE, allow_redirects=True)
+                    # Forzar headers de navegador para evitar bloqueos de Google
+                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                    res = requests.get(URL_GOOGLE_DRIVE, headers=headers, allow_redirects=True)
+                    
                     ruta_temp_d = "temp_promos_octubre.xlsx"
                     with open(ruta_temp_d, "wb") as f:
                         f.write(res.content)
                     
                     promociones_df = leer_promociones(ruta_temp_d)
                     
+                    if promociones_df is None or promociones_df.empty:
+                        st.warning("⚠️ El archivo de promociones descargado de Google Drive está vacío o no se reconoció su estructura.")
+                    
                     if os.path.exists(ruta_temp_d):
                         os.remove(ruta_temp_d)
             except Exception as e:
-                st.error(f"⚠️ Error al leer promociones de Google Drive: {e}")
+                st.error(f"⚠️ Error al procesar las promociones desde Google Drive:\n\n`{e}`")
 
         # MOSTRAR SECCIÓN 3 DE FILTROS Y PROCESAMIENTO ÚNICAMENTE SI SE CARGARON LAS PROMOS
         if promociones_df is not None and not promociones_df.empty:
