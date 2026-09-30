@@ -10,10 +10,11 @@ from cruzar import cruzar_promociones_stock
 from formato import generar_excel
 
 # ============================================================
-# CONFIGURACIÓN DE ENLACE DE GOOGLE DRIVE (OCTUBRE)
+# CONFIGURACIÓN DE ENLACE DE GOOGLE DRIVE (OCTUBRE - ARCHIVO .XLSX)
 # ============================================================
 ID_DRIVE = "1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK"
-URL_GOOGLE_DRIVE = f"https://docs.google.com/spreadsheets/d/{ID_DRIVE}/export?format=xlsx"
+# URL oficial de Google Drive para descargar directamente archivos Excel (.xlsx)
+URL_GOOGLE_DRIVE = f"https://drive.google.com/uc?export=download&id={ID_DRIVE}"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
@@ -130,8 +131,8 @@ with tab_sucursal:
         else:
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-                    res = requests.get(URL_GOOGLE_DRIVE, headers=headers, allow_redirects=True)
+                    session = requests.Session()
+                    res = session.get(URL_GOOGLE_DRIVE, allow_redirects=True)
                     
                     ruta_temp_d = "temp_promos_octubre.xlsx"
                     with open(ruta_temp_d, "wb") as f:
@@ -140,7 +141,7 @@ with tab_sucursal:
                     promociones_df = leer_promociones(ruta_temp_d)
                     
                     if promociones_df is None or promociones_df.empty:
-                        st.warning("⚠️ El archivo de promociones descargado de Google Drive está vacío o no se reconoció su estructura.")
+                        st.warning("⚠️ El archivo de promociones bajó, pero no se reconoció su estructura interna o nombres de hojas.")
                     
                     if os.path.exists(ruta_temp_d):
                         os.remove(ruta_temp_d)
