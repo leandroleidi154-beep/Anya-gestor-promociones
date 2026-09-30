@@ -105,7 +105,7 @@ tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Ma
 with tab_sucursal:
     st.subheader("Generar reporte para Sucursal")
     
-    archivo_stock_subido = st.file_uploader(
+archivo_stock_subido = st.file_uploader(
         "1. Cargar archivo de Stock (.xlsx, .xls, .ods)",
         type=["xlsx", "xls", "ods"],
         key="uploader_stock"
@@ -171,40 +171,13 @@ with tab_sucursal:
                     horizontal=False
                 )
             
-            promociones_filtradas = promociones_df.copy()
+            # --- AQUÍ AGREGAS EL CHECKBOX DE SEPARAR HOJAS Y EL BOTÓN ---
+            st.divider()
+            separar_hojas = st.checkbox("📑 Separar las hojas de Control por cada hoja del Excel de Marketing")
             
-            if tipo_filtro == "Filtrar por Proveedor":
-                opciones = sorted([str(x) for x in promociones_df["Proveedor"].dropna().unique() if str(x).strip() != ""])
-                sel = st.multiselect("Seleccioná los proveedores:", opciones)
-                if sel:
-                    promociones_filtradas = promociones_df[promociones_df["Proveedor"].astype(str).isin(sel)]
-            
-            elif tipo_filtro == "Filtrar por Línea":
-                opciones = sorted([str(x) for x in promociones_df["Linea"].dropna().unique() if str(x).strip() != ""])
-                sel = st.multiselect("Seleccioná las líneas:", opciones)
-                if sel:
-                    promociones_filtradas = promociones_df[promociones_df["Linea"].astype(str).isin(sel)]
-                    
-            elif tipo_filtro == "Filtrar por Hoja":
-                opciones = sorted([str(x) for x in promociones_df["Hoja"].dropna().unique() if str(x).strip() != ""])
-                sel = st.multiselect("Seleccioná las hojas:", opciones)
-                if sel:
-                    promociones_filtradas = promociones_df[promociones_df["Hoja"].astype(str).isin(sel)]
-
-           # --- CÓDIGO ACTUALIZADO EN app.py ---
-st.divider()
-
-# Opción para separar las hojas de control
-dividir_hojas_control = st.checkbox(
-    "📄 Separar las hojas de Control por cada hoja del Excel de Marketing",
-    value=False,
-    help="Si está marcado, creará una hoja 'Control - <Nombre>' por cada sección/hoja de marketing. Si no, generará una sola hoja 'Control'."
-)
-
-if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
-    with st.spinner("Cruzando promociones con el stock..."):
-        stock_df = leer_stock(ruta_stock_temp)
-        resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
+            if st.button("🚀 Procesar y Generar Reporte"):
+                st.info("Generando reporte...")
+                # (Aquí va tu lógica de cruce y el botón de descarga del Excel final)
     
     if resultado.empty:
         col_triste_txt, col_triste_img = st.columns([2.5, 1])
