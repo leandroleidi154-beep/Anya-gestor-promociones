@@ -11,7 +11,7 @@ from formato import generar_excel
 # ============================================================
 # CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
 # ============================================================
-URL_GOOGLE_DRIVE = "https://drive.google.com/uc?export=download&id=1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ"
+URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK/export?format=xlsx"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
@@ -111,22 +111,38 @@ with tab_sucursal:
         key="uploader_stock"
     )
     
-    if archivo_stock_subido is not None:
-        ruta_stock_temp = "temp_stock_sucursal.xlsx"
-        with open(ruta_stock_temp, "wb") as f:
-            f.write(archivo_stock_subido.getbuffer())
-        
-        st.divider()
-        st.subheader("2. Selección de Promociones")
-        
-        # Opción para usar promociones alternativas en la sesión local
-        usar_promos_personalizadas = st.checkbox(
-            "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
-            value=False
+if archivo_stock_subido is not None:
+    ruta_stock_temp = "temp_stock_sucursal.xlsx"
+    with open(ruta_stock_temp, "wb") as f:
+        f.write(archivo_stock_subido.getbuffer())
+
+    st.divider()
+    st.subheader("2. Selección de Promociones")
+
+    # Opción para usar promociones alternativas en la sesión local
+    usar_promos_personalizadas = st.checkbox(
+        "⚠️️ Usar un archivo de promociones personalizado (solo para este cruce)",
+        value=False
+    )
+
+    # Si tenés un file_uploader para promociones personalizadas o la lógica del botón:
+    if usar_promos_personalizadas:
+        archivo_promos_subido = st.file_uploader(
+            "Cargar Excel de promociones personalizado",
+            type=["xlsx", "xls"],
+            key="uploader_promos"
         )
+    else:
+        archivo_promos_subido = None
+
+    separar_hojas = st.checkbox("📑 Separar las hojas de Control por cada hoja del Excel de Marketing")
+
+    # Botón para ejecutar el procesamiento
+    if st.button("🚀 Procesar y Generar Reporte"):
+        st.info("Procesando archivos...")
         
-        promociones_df = None
-        
+        # AQUÍ VA TU LÓGICA DE PROCESAMIENTO ACTUAL
+        # (Asegúrate de mantener 8 espacios de sangría para lo que esté dentro de este botón)
         if usar_promos_personalizadas:
             archivo_promos_subido = st.file_uploader(
                 "Cargar lista de promociones propia (.xlsx, .xls, .ods)",
