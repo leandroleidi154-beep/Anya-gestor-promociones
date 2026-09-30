@@ -51,6 +51,17 @@ def leer_promociones(archivo):
             print(f"  [Aviso] A la hoja '{nombre_hoja}' le faltan columnas {faltantes}, se saltea.")
             continue
 
+        # Extraer el proveedor desde la celda A1 si existe, o usar el nombre de la hoja
+        proveedor_encabezado = ""
+        try:
+            val_a1 = str(promociones.iloc[0, 0]).strip()
+            if val_a1 and val_a1.upper() != "NAN":
+                proveedor_encabezado = val_a1
+            else:
+                proveedor_encabezado = nombre_hoja
+        except Exception:
+            proveedor_encabezado = nombre_hoja
+
         for i in range(fila_promociones + 1, len(promociones)):
 
             codigo = promociones.iloc[
@@ -87,12 +98,13 @@ def leer_promociones(archivo):
 
             fin = limpiar_fecha(fin)
 
+            # Si la columna "proveedor" existe en la tabla (Septiembre), la lee.
+            # Si NO existe (Octubre), usa el valor sacado del título / nombre de hoja.
             if "proveedor" in columnas_promociones:
-                proveedor = promociones.iloc[
-                    i, columnas_promociones["proveedor"]
-                ]
+                val_prov = promociones.iloc[i, columnas_promociones["proveedor"]]
+                proveedor = str(val_prov).strip() if pd.notna(val_prov) else proveedor_encabezado
             else:
-                proveedor = ""
+                proveedor = proveedor_encabezado
 
             if "linea" in columnas_promociones:
                 linea = promociones.iloc[
