@@ -105,84 +105,106 @@ tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Ma
 with tab_sucursal:
     st.subheader("Generar reporte para Sucursal")
     
-archivo_stock_subido = st.file_uploader(
+    archivo_stock_subido = st.file_uploader(
         "1. Cargar archivo de Stock (.xlsx, .xls, .ods)",
         type=["xlsx", "xls", "ods"],
         key="uploader_stock"
     )
     
-archivo_stock_subido = st.file_uploader(
-    "1. Cargar archivo de Stock (.xlsx, .xls, .ods)",
-    type=["xlsx", "xls", "ods"],
-    key="uploader_stock"
+    if archivo_stock_subido is not None:
+        ruta_stock_temp = "temp_stock_sucursal.xlsx"
+        with open(ruta_stock_temp, "wb") as f:
+            f.write(archivo_stock_subido.getbuffer())
+        
+        st.divider()
+        st.subheader("2. Selección de Promociones")
+        
+        # Opción para usar promociones alternativas en la sesión local
+        usar_promos_personalizadas = st.checkbox(
+            "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
+            value=False
+        )
+        
+        promociones_df = None
+        
+        if usar_promos_personalizadas:
+            archivo_promos_subido = st.file_uploader(
+                "Cargar lista de promociones propia (.xlsx, .xls, .ods)",
+                type=["xlsx", "xls", "ods"],
+                key="uploader_promos_custom"
+            )
+            if archivo_promos_subido is not None:
+                ruta_promos_temp = "temp_promos_custom.xlsx"
+                with open(ruta_promos_temp, "wb") as f:
+                    f.write(archivo_promos_subido.getbuffer())
+                try:
+                    promociones_df = leer_promociones(ruta_promos_temp)
+                    st.info("ℹ️ Usando la lista de promociones subida manualmente.")
+                except Exception as e:
+                    st.error(f"Error al leer el archivo de promociones subido: {e}")
+                finally:
+                    if os.path.exists(ruta_promos_temp):
+                        os.remove(ruta_promos_temp)
+            else:
+                st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
+        else:
+            try:
+                with st.spinner("Descargando base de promociones general desde Google Drive..."):
+                    promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
+            except Exception as e:
+                st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
+
+        # Si tenemos un dataframe de promociones válido (sea de Drive o personalizado)
+        if promociones_df is not None and not promociones_df.empty:
+            st.divider()
+            st.write("**3. Filtros opcionales**")
+            
+            col_img_filtro, col_txt = st.columns([1, 2.5])
+            with col_img_filtro:
+                if RUTA_PENSANDO:
+                    st.image(RUTA_PENSANDO, caption="Filtrando...", width=160)
+            
+            with col_txt:
+                tipo_filtro = st.radio(
+                    "¿Cómo querés filtrar las promociones?",
+                    ["Mostrar todas", "Filtrar por Proveedor", "Filtrar por Línea", "Filtrar por Hoja"],
+                    horizontal=False
+                )
+            
+            promociones_filtradas = promociones_df.copy()
+            
+            if tipo_filtro == "Filtrar por Proveedor":
+                opciones = sorted([str(x) for x in promociones_df["Proveedor"].dropna().unique() if str(x).strip() != ""])
+                sel = st.multiselect("Seleccioná los proveedores:", opciones)
+                if sel:
+                    promociones_filtradas = promociones_df[promociones_df["Proveedor"].astype(str).isin(sel)]
+            
+            elif tipo_filtro == "Filtrar por Línea":
+                opciones = sorted([str(x) for x in promociones_df["Linea"].dropna().unique() if str(x).strip() != ""])
+                sel = st.multiselect("Seleccioná las líneas:", opciones)
+                if sel:
+                    promociones_filtradas = promociones_df[promociones_df["Linea"].astype(str).isin(sel)]
+                    
+            elif tipo_filtro == "Filtrar por Hoja":
+                opciones = sorted([str(x) for x in promociones_df["Hoja"].dropna().unique() if str(x).strip() != ""])
+                sel = st.multiselect("Seleccioná las hojas:", opciones)
+                if sel:
+                    promociones_filtradas = promociones_df[promociones_df["Hoja"].astype(str).isin(sel)]
+
+           # --- CÓDIGO ACTUALIZADO EN app.py ---
+st.divider()
+
+# Opción para separar las hojas de control
+dividir_hojas_control = st.checkbox(
+    "📄 Separar las hojas de Control por cada hoja del Excel de Marketing",
+    value=False,
+    help="Si está marcado, creará una hoja 'Control - <Nombre>' por cada sección/hoja de marketing. Si no, generará una sola hoja 'Control'."
 )
 
-if archivo_stock_subido is not None:
-    ruta_stock_temp = "temp_stock_sucursal.xlsx"
-    with open(ruta_stock_temp, "wb") as f:
-        f.write(archivo_stock_subido.getbuffer())
-    
-    st.divider()
-    st.subheader("2. Selección de Promociones")
-    
-    # Opción para usar promociones alternativas en la sesión local
-    usar_promos_personalizadas = st.checkbox(
-        "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
-        value=False
-    )
-    
-    promociones_df = None
-    
-    if usar_promos_personalizadas:
-        archivo_promos_subido = st.file_uploader(
-            "Cargar lista de promociones propia (.xlsx, .xls, .ods)",
-            type=["xlsx", "xls", "ods"],
-            key="uploader_promos_custom"
-        )
-        if archivo_promos_subido is not None:
-            ruta_promos_temp = "temp_promos_custom.xlsx"
-            with open(ruta_promos_temp, "wb") as f:
-                f.write(archivo_promos_subido.getbuffer())
-            try:
-                promociones_df = leer_promociones(ruta_promos_temp)
-                st.info("ℹ️ Usando la lista de promociones subida manualmente.")
-            except Exception as e:
-                st.error(f"Error al leer el archivo de promociones subido: {e}")
-            finally:
-                if os.path.exists(ruta_promos_temp):
-                    os.remove(ruta_promos_temp)
-        else:
-            st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
-    else:
-        try:
-            with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
-        except Exception as e:
-            st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
-
-    # Si tenemos un dataframe de promociones válido (sea de Drive o personalizado)
-    if promociones_df is not None and not promociones_df.empty:
-        st.divider()
-        st.write("**3. Filtros opcionales**")
-        
-        col_img_filtro, col_txt = st.columns([1, 2.5])
-        with col_img_filtro:
-            if RUTA_PENSANDO:
-                st.image(RUTA_PENSANDO, caption="Filtrando...", width=160)
-        
-        with col_txt:
-            tipo_filtro = st.radio(
-                "¿Cómo querés filtrar las promociones?",
-                ["Mostrar todas", "Filtrar por Proveedor", "Filtrar por Línea", "Filtrar por Hoja"],
-                horizontal=False
-            )
-        
-        st.divider()
-        separar_hojas = st.checkbox("📑 Separar las hojas de Control por cada hoja del Excel de Marketing")
-        
-        if st.button("🚀 Procesar y Generar Reporte"):
-            st.info("Generando reporte...")
-            # (Aquí continúa tu lógica de procesamiento actual)
+if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
+    with st.spinner("Cruzando promociones con el stock..."):
+        stock_df = leer_stock(ruta_stock_temp)
+        resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
     
     if resultado.empty:
         col_triste_txt, col_triste_img = st.columns([2.5, 1])
