@@ -13,7 +13,6 @@ from formato import generar_excel
 # CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
 # ============================================================
 ID_DRIVE = "1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK"
-URL_GOOGLE_DRIVE = f"https://drive.google.com/uc?export=download&id={ID_DRIVE}"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
@@ -32,15 +31,24 @@ RUTA_PENSANDO = obtener_ruta_imagen("gata_pensando")
 RUTA_EXITO = obtener_ruta_imagen("gata_exito")
 RUTA_TRISTE = obtener_ruta_imagen("gata_triste")
 
-def descargar_excel_drive(id_drive):
-    """Descarga directamente la planilla de Google Drive usando la API de exportación."""
-    url = f"https://docs.google.com/spreadsheets/d/{id_drive}/export?format=xlsx"
+def descargar_excel_drive(file_id):
+    """Descarga un archivo Excel subido a Google Drive de forma directa."""
+    # Intentamos primero con el enlace de descarga directa de archivos guardados en Drive
+    url_directa = f"https://drive.google.com/uc?export=download&id={file_id}"
     session = requests.Session()
-    response = session.get(url, allow_redirects=True)
+    response = session.get(url_directa, allow_redirects=True)
     
-    if response.status_code != 200:
-        raise ValueError(f"Google Drive respondió con código {response.status_code}. Verifica los permisos de acceso público.")
-        
+    # Manejo de token de confirmación de Google Drive para archivos grandes
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            response = session.get(f"{url_directa}&confirm={value}", allow_redirects=True)
+            break
+            
+    # Si devuelve HTML (página de error o vista previa), probamos con el exportador de Google Sheets
+    if "html" in response.headers.get("Content-Type", "").lower() or response.status_code != 200:
+        url_export = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
+        response = session.get(url_export, allow_redirects=True)
+
     ruta_temp = "temp_promos_drive.xlsx"
     with open(ruta_temp, "wb") as f:
         f.write(response.content)
@@ -142,19 +150,21 @@ with tab_sucursal:
             else:
                 st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
         else:
+            ruta_promos_drive = None
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
                     ruta_promos_drive = descargar_excel_drive(ID_DRIVE)
                     promociones_df = leer_promociones(ruta_promos_drive)
-                    if os.path.exists(ruta_promos_drive):
-                        os.remove(ruta_promos_drive)
             except Exception as e:
                 col_err_txt, col_err_img = st.columns([2.5, 1])
                 with col_err_txt:
-                    st.error(f"⚠️ Error al obtener las promociones desde Google Drive:\n\n{e}")
+                    st.error(f"⚠️ Error al leer las promociones desde Google Drive:\n\n{e}")
                 with col_err_img:
                     if RUTA_TRISTE:
                         st.image(RUTA_TRISTE, width=150)
+            finally:
+                if ruta_promos_drive and os.path.exists(ruta_promos_drive):
+                    os.remove(ruta_promos_drive)
 
         # Si las promociones se cargaron bien, mostramos los filtros y el botón
         if promociones_df is not None and not promociones_df.empty:
