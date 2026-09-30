@@ -1,5 +1,6 @@
 import os
 import io
+import requests
 import pandas as pd
 import streamlit as st
 
@@ -11,7 +12,8 @@ from formato import generar_excel
 # ============================================================
 # CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
 # ============================================================
-URL_GOOGLE_DRIVE = "https://drive.google.com/uc?export=download&id=1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK"
+ID_DRIVE = "1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK"
+URL_GOOGLE_DRIVE = f"https://drive.google.com/uc?export=download&id={ID_DRIVE}"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
@@ -30,6 +32,24 @@ RUTA_PENSANDO = obtener_ruta_imagen("gata_pensando")
 RUTA_EXITO = obtener_ruta_imagen("gata_exito")
 RUTA_TRISTE = obtener_ruta_imagen("gata_triste")
 
+def descargar_excel_drive(url):
+    """Descarga el archivo de Google Drive a un archivo local temporal."""
+    session = requests.Session()
+    response = session.get(url, stream=True)
+    
+    # Manejo de confirmación de descarga de archivos en Drive
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            response = session.get(f"{url}&confirm={value}", stream=True)
+            break
+            
+    ruta_temp = "temp_promos_drive.xlsx"
+    with open(ruta_temp, "wb") as f:
+        for chunk in response.iter_content(chunk_size=32768):
+            if chunk:
+                f.write(chunk)
+    return ruta_temp
+
 # Configuración de página
 st.set_page_config(
     page_title="Gestor de Promociones - Farmacia del Pueblo",
@@ -37,7 +57,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# Estilos CSS avanzados
+# Estilos CSS
 st.markdown("""
     <style>
     [data-testid="stHeader"], header, .stAppHeader, footer,
@@ -99,7 +119,7 @@ with tab_sucursal:
         st.subheader("2. Selección de Promociones")
         
         usar_promos_personalizadas = st.checkbox(
-            "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
+            "⚠️️ Usar un archivo de promociones personalizado (solo para este cruce)",
             value=False
         )
         
@@ -128,11 +148,14 @@ with tab_sucursal:
         else:
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
+                    ruta_promos_drive = descargar_excel_drive(URL_GOOGLE_DRIVE)
+                    promociones_df = leer_promociones(ruta_promos_drive)
+                    if os.path.exists(ruta_promos_drive):
+                        os.remove(ruta_promos_drive)
             except Exception as e:
                 st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
 
-        # Si el DataFrame de promociones se descargó/leyó correctamente:
+        # Si las promociones se cargaron bien, mostramos los filtros y el botón de generar
         if promociones_df is not None and not promociones_df.empty:
             st.divider()
             st.write("**3. Filtros opcionales**")
@@ -171,7 +194,6 @@ with tab_sucursal:
 
             st.divider()
 
-            # Opción para separar hojas de control
             dividir_hojas_control = st.checkbox(
                 "📄 Separar las hojas de Control por cada hoja del Excel de Marketing",
                 value=False,
