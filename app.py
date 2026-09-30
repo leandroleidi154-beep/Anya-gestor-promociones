@@ -11,7 +11,7 @@ from formato import generar_excel
 # ============================================================
 # CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
 # ============================================================
-URL_GOOGLE_DRIVE = "https://drive.google.com/uc?export=download&id=1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ"
+URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK/export?format=xlsx"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
