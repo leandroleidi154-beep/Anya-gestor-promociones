@@ -31,20 +31,19 @@ RUTA_PENSANDO = obtener_ruta_imagen("gata_pensando")
 RUTA_EXITO = obtener_ruta_imagen("gata_exito")
 RUTA_TRISTE = obtener_ruta_imagen("gata_triste")
 
-def descargar_excel_drive(file_id):
-    """Descarga un archivo Excel subido a Google Drive de forma directa."""
-    # Intentamos primero con el enlace de descarga directa de archivos guardados en Drive
+@st.cache_data(ttl=600, show_spinner=False)
+def descargar_y_cargar_promos_drive(file_id):
+    """Descarga de Google Drive y procesa el DataFrame con caché de 10 min."""
     url_directa = f"https://drive.google.com/uc?export=download&id={file_id}"
     session = requests.Session()
     response = session.get(url_directa, allow_redirects=True)
     
-    # Manejo de token de confirmación de Google Drive para archivos grandes
+    # Manejo de confirmación para archivos de Drive
     for key, value in response.cookies.items():
         if key.startswith('download_warning'):
             response = session.get(f"{url_directa}&confirm={value}", allow_redirects=True)
             break
             
-    # Si devuelve HTML (página de error o vista previa), probamos con el exportador de Google Sheets
     if "html" in response.headers.get("Content-Type", "").lower() or response.status_code != 200:
         url_export = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
         response = session.get(url_export, allow_redirects=True)
@@ -52,7 +51,14 @@ def descargar_excel_drive(file_id):
     ruta_temp = "temp_promos_drive.xlsx"
     with open(ruta_temp, "wb") as f:
         f.write(response.content)
-    return ruta_temp
+    
+    try:
+        df = leer_promociones(ruta_temp)
+    finally:
+        if os.path.exists(ruta_temp):
+            os.remove(ruta_temp)
+            
+    return df
 
 # Configuración de página
 st.set_page_config(
@@ -115,10 +121,19 @@ with tab_sucursal:
     )
     
     if archivo_stock_subido is not None:
-        ruta_stock_temp = "temp_stock_sucursal.xlsx"
-        with open(ruta_stock_temp, "wb") as f:
-            f.write(archivo_stock_subido.getbuffer())
-        
+        # 1. Cargar Stock
+        bytes_stock = io.BytesIO(archivo_stock_subido.getvalue())
+        try:
+            stock_df = leer_stock(bytes_stock)
+        except Exception as e:
+            # Si falla leyendo directo en BytesIO, guardamos archivo temporal
+            ruta_stock_temp = "temp_stock_sucursal.xlsx"
+            with open(ruta_stock_temp, "wb") as f:
+                f.write(archivo_stock_subido.getbuffer())
+            stock_df = leer_stock(ruta_stock_temp)
+            if os.path.exists(ruta_stock_temp):
+                os.remove(ruta_stock_temp)
+
         st.divider()
         st.subheader("2. Selección de Promociones")
         
@@ -150,23 +165,18 @@ with tab_sucursal:
             else:
                 st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
         else:
-            ruta_promos_drive = None
             try:
-                with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    ruta_promos_drive = descargar_excel_drive(ID_DRIVE)
-                    promociones_df = leer_promociones(ruta_promos_drive)
+                with st.spinner("Cargando lista de promociones (A OCTUBRE)..."):
+                    promociones_df = descargar_y_cargar_promos_drive(ID_DRIVE)
             except Exception as e:
                 col_err_txt, col_err_img = st.columns([2.5, 1])
                 with col_err_txt:
-                    st.error(f"⚠️ Error al leer las promociones desde Google Drive:\n\n{e}")
+                    st.error(f"⚠️ Error al obtener las promociones desde Google Drive:\n\n{e}")
                 with col_err_img:
                     if RUTA_TRISTE:
                         st.image(RUTA_TRISTE, width=150)
-            finally:
-                if ruta_promos_drive and os.path.exists(ruta_promos_drive):
-                    os.remove(ruta_promos_drive)
 
-        # Si las promociones se cargaron bien, mostramos los filtros y el botón
+        # 3. Mostrar Filtros y Botón de Reporte
         if promociones_df is not None and not promociones_df.empty:
             st.divider()
             st.write("**3. Filtros opcionales**")
@@ -185,19 +195,19 @@ with tab_sucursal:
             
             promociones_filtradas = promociones_df.copy()
             
-            if tipo_filtro == "Filtrar por Proveedor":
+            if tipo_filtro == "Filtrar por Proveedor" and "Proveedor" in promociones_df.columns:
                 opciones = sorted([str(x) for x in promociones_df["Proveedor"].dropna().unique() if str(x).strip() != ""])
                 sel = st.multiselect("Seleccioná los proveedores:", opciones)
                 if sel:
                     promociones_filtradas = promociones_df[promociones_df["Proveedor"].astype(str).isin(sel)]
             
-            elif tipo_filtro == "Filtrar por Línea":
+            elif tipo_filtro == "Filtrar por Línea" and "Linea" in promociones_df.columns:
                 opciones = sorted([str(x) for x in promociones_df["Linea"].dropna().unique() if str(x).strip() != ""])
                 sel = st.multiselect("Seleccioná las líneas:", opciones)
                 if sel:
                     promociones_filtradas = promociones_df[promociones_df["Linea"].astype(str).isin(sel)]
                     
-            elif tipo_filtro == "Filtrar por Hoja":
+            elif tipo_filtro == "Filtrar por Hoja" and "Hoja" in promociones_df.columns:
                 opciones = sorted([str(x) for x in promociones_df["Hoja"].dropna().unique() if str(x).strip() != ""])
                 sel = st.multiselect("Seleccioná las hojas:", opciones)
                 if sel:
@@ -213,7 +223,6 @@ with tab_sucursal:
             
             if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
                 with st.spinner("Cruzando promociones con el stock..."):
-                    stock_df = leer_stock(ruta_stock_temp)
                     resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
                 
                 if resultado.empty:
@@ -254,9 +263,6 @@ with tab_sucursal:
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                         use_container_width=True
                     )
-
-        if os.path.exists(ruta_stock_temp):
-            os.remove(ruta_stock_temp)
 
 # ============================================================
 # PESTAÑA 2: INFORMACIÓN DE MARKETING
