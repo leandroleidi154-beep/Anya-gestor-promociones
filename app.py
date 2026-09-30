@@ -1,5 +1,6 @@
 import os
 import io
+import requests
 import pandas as pd
 import streamlit as st
 
@@ -9,9 +10,10 @@ from cruzar import cruzar_promociones_stock
 from formato import generar_excel
 
 # ============================================================
-# CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
+# CONFIGURACIÓN DE ENLACE DE GOOGLE DRIVE (OCTUBRE)
 # ============================================================
-URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK/export?format=xlsx"
+ID_DRIVE = "1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK"
+URL_GOOGLE_DRIVE = f"https://docs.google.com/spreadsheets/d/{ID_DRIVE}/export?format=xlsx"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
@@ -37,37 +39,16 @@ st.set_page_config(
     layout="centered"
 )
 
-# Estilos CSS avanzados para ocultar la interfaz por defecto de Streamlit
+# Estilos CSS
 st.markdown("""
     <style>
-    /* Ocultar barra superior (Header), botones de GitHub, Fork y menú de 3 puntos */
-    [data-testid="stHeader"],
-    header,
-    .stAppHeader {
-        display: none !important;
-    }
-    
-    /* Ocultar pie de página por defecto */
-    footer {
-        display: none !important;
-    }
-    
-    /* Ocultar el botón rojo/blanco inferior de Streamlit Cloud y estado */
-    [data-testid="stStatusWidget"],
-    [data-testid="stViewerBadge"],
-    .stStatusWidget,
-    #stDecoration,
-    [data-testid="stDecoration"],
-    div[class*="viewerBadge"] {
+    [data-testid="stHeader"], header, .stAppHeader, footer,
+    [data-testid="stStatusWidget"], [data-testid="stViewerBadge"],
+    .stStatusWidget, #stDecoration, [data-testid="stDecoration"],
+    div[class*="viewerBadge"], .stAppToolbar {
         display: none !important;
         visibility: hidden !important;
     }
-    
-    .stAppToolbar {
-        display: none !important;
-    }
-
-    /* Estilos del encabezado principal */
     .main-header { font-size: 28px; font-weight: bold; color: #39476A; }
     .sub-header { font-size: 15px; color: #888888; margin-bottom: 20px; }
     div.stButton > button:first-child {
@@ -111,6 +92,7 @@ with tab_sucursal:
         key="uploader_stock"
     )
     
+    # SOLO SI EL USUARIO SUBIÓ UN ARCHIVO DE STOCK SE MUESTRA EL RESTO DE LA APP
     if archivo_stock_subido is not None:
         ruta_stock_temp = "temp_stock_sucursal.xlsx"
         with open(ruta_stock_temp, "wb") as f:
@@ -119,7 +101,6 @@ with tab_sucursal:
         st.divider()
         st.subheader("2. Selección de Promociones")
         
-        # Opción para usar promociones alternativas en la sesión local
         usar_promos_personalizadas = st.checkbox(
             "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
             value=False
@@ -150,11 +131,19 @@ with tab_sucursal:
         else:
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
+                    res = requests.get(URL_GOOGLE_DRIVE, allow_redirects=True)
+                    ruta_temp_d = "temp_promos_octubre.xlsx"
+                    with open(ruta_temp_d, "wb") as f:
+                        f.write(res.content)
+                    
+                    promociones_df = leer_promociones(ruta_temp_d)
+                    
+                    if os.path.exists(ruta_temp_d):
+                        os.remove(ruta_temp_d)
             except Exception as e:
-                st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
+                st.error(f"⚠️ Error al leer promociones de Google Drive: {e}")
 
-        # Si tenemos un dataframe de promociones válido (sea de Drive o personalizado)
+        # MOSTRAR SECCIÓN 3 DE FILTROS Y PROCESAMIENTO ÚNICAMENTE SI SE CARGARON LAS PROMOS
         if promociones_df is not None and not promociones_df.empty:
             st.divider()
             st.write("**3. Filtros opcionales**")
@@ -173,81 +162,81 @@ with tab_sucursal:
             
             promociones_filtradas = promociones_df.copy()
             
-            if tipo_filtro == "Filtrar por Proveedor":
+            if tipo_filtro == "Filtrar por Proveedor" and "Proveedor" in promociones_df.columns:
                 opciones = sorted([str(x) for x in promociones_df["Proveedor"].dropna().unique() if str(x).strip() != ""])
                 sel = st.multiselect("Seleccioná los proveedores:", opciones)
                 if sel:
                     promociones_filtradas = promociones_df[promociones_df["Proveedor"].astype(str).isin(sel)]
             
-            elif tipo_filtro == "Filtrar por Línea":
+            elif tipo_filtro == "Filtrar por Línea" and "Linea" in promociones_df.columns:
                 opciones = sorted([str(x) for x in promociones_df["Linea"].dropna().unique() if str(x).strip() != ""])
                 sel = st.multiselect("Seleccioná las líneas:", opciones)
                 if sel:
                     promociones_filtradas = promociones_df[promociones_df["Linea"].astype(str).isin(sel)]
                     
-            elif tipo_filtro == "Filtrar por Hoja":
+            elif tipo_filtro == "Filtrar por Hoja" and "Hoja" in promociones_df.columns:
                 opciones = sorted([str(x) for x in promociones_df["Hoja"].dropna().unique() if str(x).strip() != ""])
                 sel = st.multiselect("Seleccioná las hojas:", opciones)
                 if sel:
                     promociones_filtradas = promociones_df[promociones_df["Hoja"].astype(str).isin(sel)]
 
-           # --- CÓDIGO ACTUALIZADO EN app.py ---
-st.divider()
+            st.divider()
 
-# Opción para separar las hojas de control
-dividir_hojas_control = st.checkbox(
-    "📄 Separar las hojas de Control por cada hoja del Excel de Marketing",
-    value=False,
-    help="Si está marcado, creará una hoja 'Control - <Nombre>' por cada sección/hoja de marketing. Si no, generará una sola hoja 'Control'."
-)
-
-if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
-    with st.spinner("Cruzando promociones con el stock..."):
-        stock_df = leer_stock(ruta_stock_temp)
-        resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
-    
-    if resultado.empty:
-        col_triste_txt, col_triste_img = st.columns([2.5, 1])
-        with col_triste_txt:
-            st.error("No se encontraron coincidencias para los productos de tu stock con la selección realizada.")
-        with col_triste_img:
-            if RUTA_TRISTE:
-                st.image(RUTA_TRISTE, width=160)
-    else:
-        col_exito_txt, col_exito_img = st.columns([2.5, 1])
-        with col_exito_txt:
-            st.success("¡Cruce realizado con éxito!")
+            dividir_hojas_control = st.checkbox(
+                "📄 Separar las hojas de Control por cada hoja del Excel de Marketing",
+                value=False,
+                help="Si está marcado, creará una hoja 'Control - <Nombre>' por cada sección del Excel de marketing."
+            )
             
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Promociones", len(resultado))
-            
-            vencidas = (resultado["Estado"] == "VENCIDA").sum() if "Estado" in resultado.columns else 0
-            vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum() if "Estado" in resultado.columns else 0
-            duplicados = (resultado["Revisar duplicado"] == "SI").sum() if "Revisar duplicado" in resultado.columns else 0
-            
-            col2.metric("Vencidas", vencidas)
-            col3.metric("Vencen Mañana", vence_manana)
-            col4.metric("Duplicadas", duplicados)
-            
-        with col_exito_img:
-            if RUTA_EXITO:
-                st.image(RUTA_EXITO, caption="¡Promos encontradas!", width=160)
-        
-        output = io.BytesIO()
-        # Se pasa el argumento 'dividir_control' configurado desde la interfaz
-        generar_excel(resultado, output, dividir_control=dividir_hojas_control)
-        bytes_excel = output.getvalue()
-        
-        st.download_button(
-            label="📥 Descargar Reporte en Excel (.xlsx)",
-            data=bytes_excel,
-            file_name="Promociones_en_Stock.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
-        )
+            if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
+                with st.spinner("Cruzando promociones con el stock..."):
+                    stock_df = leer_stock(ruta_stock_temp)
+                    resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
+                
+                if resultado.empty:
+                    col_triste_txt, col_triste_img = st.columns([2.5, 1])
+                    with col_triste_txt:
+                        st.error("No se encontraron coincidencias para los productos de tu stock con la selección realizada.")
+                    with col_triste_img:
+                        if RUTA_TRISTE:
+                            st.image(RUTA_TRISTE, width=160)
+                else:
+                    col_exito_txt, col_exito_img = st.columns([2.5, 1])
+                    with col_exito_txt:
+                        st.success("¡Cruce realizado con éxito!")
+                        
+                        col1, col2, col3, col4 = st.columns(4)
+                        col1.metric("Promociones", len(resultado))
+                        
+                        vencidas = (resultado["Estado"] == "VENCIDA").sum() if "Estado" in resultado.columns else 0
+                        vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum() if "Estado" in resultado.columns else 0
+                        duplicados = (resultado["Revisar duplicado"] == "SI").sum() if "Revisar duplicado" in resultado.columns else 0
+                        
+                        col2.metric("Vencidas", vencidas)
+                        col3.metric("Vencen Mañana", vence_manana)
+                        col4.metric("Duplicadas", duplicados)
+                        
+                    with col_exito_img:
+                        if RUTA_EXITO:
+                            st.image(RUTA_EXITO, caption="¡Promos encontradas!", width=160)
+                    
+                    output = io.BytesIO()
+                    generar_excel(resultado, output, dividir_control=dividir_hojas_control)
+                    bytes_excel = output.getvalue()
+                    
+                    st.download_button(
+                        label="📥 Descargar Reporte en Excel (.xlsx)",
+                        data=bytes_excel,
+                        file_name="Promociones_en_Stock.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
 
         if os.path.exists(ruta_stock_temp):
-            os.remove(ruta_stock_temp)
+            try:
+                os.remove(ruta_stock_temp)
+            except Exception:
+                pass
 
 # ============================================================
 # PESTAÑA 2: INFORMACIÓN DE MARKETING
