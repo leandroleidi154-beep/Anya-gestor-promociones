@@ -1,79 +1,38 @@
 import pandas as pd
 
-from limpiar import (
-    buscar_encabezados_stock,
-    buscar_columnas,
-    limpiar_codigo,
-    limpiar_precio,
-    limpiar_cantidad
-)
-from formatos import leer_tabla_bruta
+def leer_stock(filepath_or_buffer):
+    """
+    Lee el archivo de stock en cualquier formato:
+    - Excel moderno (.xlsx)
+    - Excel clásico (.xls)
+    - LibreOffice Calc (.ods)
+    - HTML exportado desde ERP con extensión .xls
+    """
+    df = None
+    
+    # 1. Intentar leerlo como Excel tradicional o LibreOffice (.xlsx, .xls, .ods)
+    try:
+        df = pd.read_excel(filepath_or_buffer)
+    except Exception:
+        pass
 
+    # 2. Si falló, intentar leerlo como HTML (típico de exportaciones de sistemas de farmacia)
+    if df is None:
+        try:
+            dfs = pd.read_html(filepath_or_buffer)
+            if dfs:
+                df = dfs[0]
+                # Si los nombres de columnas quedaron en la primera fila de datos
+                if df.iloc[0].astype(str).str.contains("Descripción|Troquel|Código de Barras|Stock", case=False).any():
+                    df.columns = df.iloc[0]
+                    df = df[1:].reset_index(drop=True)
+        except Exception as e:
+            raise ValueError(f"No se pudo interpretar el formato del archivo de stock: {e}")
 
-def leer_stock(archivo):
+    if df is None or df.empty:
+        raise ValueError("El archivo de stock está vacío o no se pudo procesar.")
 
-    stock = leer_tabla_bruta(archivo)
+    # Limpiar nombres de columnas (quitar espacios extra)
+    df.columns = [str(col).strip() for col in df.columns]
 
-    fila_stock = buscar_encabezados_stock(stock)
-
-    if fila_stock is None:
-        raise ValueError("No se encontraron los encabezados de Stock.")
-
-    columnas_stock = buscar_columnas(
-        stock,
-        fila_stock
-    )
-
-    columnas_necesarias = [
-        "codigo",
-        "descripcion",
-        "stock",
-        "precio"
-    ]
-
-    for columna in columnas_necesarias:
-        if columna not in columnas_stock:
-            raise ValueError(
-                f"No se encontró la columna '{columna}' en el archivo de Stock."
-            )
-
-    resultados = []
-
-    for i in range(fila_stock + 1, len(stock)):
-
-        codigo = stock.iloc[
-            i, columnas_stock["codigo"]
-        ]
-
-        if pd.isna(codigo):
-            continue
-
-        codigo = limpiar_codigo(codigo)
-
-        if codigo == "":
-            continue
-
-        descripcion = stock.iloc[
-            i, columnas_stock["descripcion"]
-        ]
-
-        cantidad = stock.iloc[
-            i, columnas_stock["stock"]
-        ]
-
-        cantidad = limpiar_cantidad(cantidad)
-
-        precio = stock.iloc[
-            i, columnas_stock["precio"]
-        ]
-
-        precio = limpiar_precio(precio)
-
-        resultados.append({
-            "Código de Barras": codigo,
-            "Descripción": descripcion,
-            "Stock": cantidad,
-            "Precio de Venta": precio
-        })
-
-    return pd.DataFrame(resultados)
+    return df
