@@ -10,9 +10,10 @@ from cruzar import cruzar_promociones_stock
 from formato import generar_excel
 
 # ============================================================
-# CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
+# CONFIGURACIÓN DE ENLACE DE GOOGLE DRIVE (OCTUBRE)
 # ============================================================
 ID_DRIVE = "1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK"
+URL_GOOGLE_DRIVE = f"https://docs.google.com/spreadsheets/d/{ID_DRIVE}/export?format=xlsx"
 
 DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
 CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
@@ -30,35 +31,6 @@ RUTA_LOGO = obtener_ruta_imagen("gata_logo")
 RUTA_PENSANDO = obtener_ruta_imagen("gata_pensando")
 RUTA_EXITO = obtener_ruta_imagen("gata_exito")
 RUTA_TRISTE = obtener_ruta_imagen("gata_triste")
-
-@st.cache_data(ttl=600, show_spinner=False)
-def descargar_y_cargar_promos_drive(file_id):
-    """Descarga de Google Drive y procesa el DataFrame con caché de 10 min."""
-    url_directa = f"https://drive.google.com/uc?export=download&id={file_id}"
-    session = requests.Session()
-    response = session.get(url_directa, allow_redirects=True)
-    
-    # Manejo de confirmación para archivos de Drive
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            response = session.get(f"{url_directa}&confirm={value}", allow_redirects=True)
-            break
-            
-    if "html" in response.headers.get("Content-Type", "").lower() or response.status_code != 200:
-        url_export = f"https://docs.google.com/spreadsheets/d/{file_id}/export?format=xlsx"
-        response = session.get(url_export, allow_redirects=True)
-
-    ruta_temp = "temp_promos_drive.xlsx"
-    with open(ruta_temp, "wb") as f:
-        f.write(response.content)
-    
-    try:
-        df = leer_promociones(ruta_temp)
-    finally:
-        if os.path.exists(ruta_temp):
-            os.remove(ruta_temp)
-            
-    return df
 
 # Configuración de página
 st.set_page_config(
@@ -121,18 +93,15 @@ with tab_sucursal:
     )
     
     if archivo_stock_subido is not None:
-        # 1. Cargar Stock
-        bytes_stock = io.BytesIO(archivo_stock_subido.getvalue())
+        stock_df = None
+        ruta_stock_temp = "temp_stock_sucursal.xls"
+        with open(ruta_stock_temp, "wb") as f:
+            f.write(archivo_stock_subido.getbuffer())
+        
         try:
-            stock_df = leer_stock(bytes_stock)
-        except Exception as e:
-            # Si falla leyendo directo en BytesIO, guardamos archivo temporal
-            ruta_stock_temp = "temp_stock_sucursal.xlsx"
-            with open(ruta_stock_temp, "wb") as f:
-                f.write(archivo_stock_subido.getbuffer())
             stock_df = leer_stock(ruta_stock_temp)
-            if os.path.exists(ruta_stock_temp):
-                os.remove(ruta_stock_temp)
+        except Exception as err_stock:
+            st.error(f"⚠️️ Error al procesar el archivo de Stock subido:\n\n{err_stock}")
 
         st.divider()
         st.subheader("2. Selección de Promociones")
@@ -166,17 +135,18 @@ with tab_sucursal:
                 st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
         else:
             try:
-                with st.spinner("Cargando lista de promociones (A OCTUBRE)..."):
-                    promociones_df = descargar_y_cargar_promos_drive(ID_DRIVE)
-            except Exception as e:
-                col_err_txt, col_err_img = st.columns([2.5, 1])
-                with col_err_txt:
-                    st.error(f"⚠️ Error al obtener las promociones desde Google Drive:\n\n{e}")
-                with col_err_img:
-                    if RUTA_TRISTE:
-                        st.image(RUTA_TRISTE, width=150)
+                with st.spinner("Descargando base de promociones general desde Google Drive..."):
+                    res = requests.get(URL_GOOGLE_DRIVE, allow_redirects=True)
+                    ruta_temp_d = "temp_drive_file.xlsx"
+                    with open(ruta_temp_d, "wb") as f:
+                        f.write(res.content)
+                    promociones_df = leer_promociones(ruta_temp_d)
+                    if os.path.exists(ruta_temp_d):
+                        os.remove(ruta_temp_d)
+            except Exception as ex:
+                st.error(f"⚠️ Error al obtener las promociones de Google Drive:\n\n{ex}")
 
-        # 3. Mostrar Filtros y Botón de Reporte
+        # MOSTRAR FILTROS Y BOTÓN SI AMBOS ARCHIVOS SE LE YERON BIEN
         if promociones_df is not None and not promociones_df.empty:
             st.divider()
             st.write("**3. Filtros opcionales**")
@@ -222,47 +192,56 @@ with tab_sucursal:
             )
             
             if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
-                with st.spinner("Cruzando promociones con el stock..."):
-                    resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
-                
-                if resultado.empty:
-                    col_triste_txt, col_triste_img = st.columns([2.5, 1])
-                    with col_triste_txt:
-                        st.error("No se encontraron coincidencias para los productos de tu stock con la selección realizada.")
-                    with col_triste_img:
-                        if RUTA_TRISTE:
-                            st.image(RUTA_TRISTE, width=160)
+                if stock_df is None or stock_df.empty:
+                    st.error("⚠️ El archivo de stock no se pudo leer correctamente. Revisa el archivo subido.")
                 else:
-                    col_exito_txt, col_exito_img = st.columns([2.5, 1])
-                    with col_exito_txt:
-                        st.success("¡Cruce realizado con éxito!")
-                        
-                        col1, col2, col3, col4 = st.columns(4)
-                        col1.metric("Promociones", len(resultado))
-                        
-                        vencidas = (resultado["Estado"] == "VENCIDA").sum() if "Estado" in resultado.columns else 0
-                        vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum() if "Estado" in resultado.columns else 0
-                        duplicados = (resultado["Revisar duplicado"] == "SI").sum() if "Revisar duplicado" in resultado.columns else 0
-                        
-                        col2.metric("Vencidas", vencidas)
-                        col3.metric("Vencen Mañana", vence_manana)
-                        col4.metric("Duplicadas", duplicados)
-                        
-                    with col_exito_img:
-                        if RUTA_EXITO:
-                            st.image(RUTA_EXITO, caption="¡Promos encontradas!", width=160)
+                    with st.spinner("Cruzando promociones con el stock..."):
+                        resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
                     
-                    output = io.BytesIO()
-                    generar_excel(resultado, output, dividir_control=dividir_hojas_control)
-                    bytes_excel = output.getvalue()
-                    
-                    st.download_button(
-                        label="📥 Descargar Reporte en Excel (.xlsx)",
-                        data=bytes_excel,
-                        file_name="Promociones_en_Stock.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
+                    if resultado.empty:
+                        col_triste_txt, col_triste_img = st.columns([2.5, 1])
+                        with col_triste_txt:
+                            st.error("No se encontraron coincidencias para los productos de tu stock con la selección realizada.")
+                        with col_triste_img:
+                            if RUTA_TRISTE:
+                                st.image(RUTA_TRISTE, width=160)
+                    else:
+                        col_exito_txt, col_exito_img = st.columns([2.5, 1])
+                        with col_exito_txt:
+                            st.success("¡Cruce realizado con éxito!")
+                            
+                            col1, col2, col3, col4 = st.columns(4)
+                            col1.metric("Promociones", len(resultado))
+                            
+                            vencidas = (resultado["Estado"] == "VENCIDA").sum() if "Estado" in resultado.columns else 0
+                            vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum() if "Estado" in resultado.columns else 0
+                            duplicados = (resultado["Revisar duplicado"] == "SI").sum() if "Revisar duplicado" in resultado.columns else 0
+                            
+                            col2.metric("Vencidas", vencidas)
+                            col3.metric("Vencen Mañana", vence_manana)
+                            col4.metric("Duplicadas", duplicados)
+                            
+                        with col_exito_img:
+                            if RUTA_EXITO:
+                                st.image(RUTA_EXITO, caption="¡Promos encontradas!", width=160)
+                        
+                        output = io.BytesIO()
+                        generar_excel(resultado, output, dividir_control=dividir_hojas_control)
+                        bytes_excel = output.getvalue()
+                        
+                        st.download_button(
+                            label="📥 Descargar Reporte en Excel (.xlsx)",
+                            data=bytes_excel,
+                            file_name="Promociones_en_Stock.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+
+        if os.path.exists(ruta_stock_temp):
+            try:
+                os.remove(ruta_stock_temp)
+            except Exception:
+                pass
 
 # ============================================================
 # PESTAÑA 2: INFORMACIÓN DE MARKETING
