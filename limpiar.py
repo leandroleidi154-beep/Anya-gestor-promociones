@@ -141,10 +141,13 @@ def buscar_encabezados(tabla):
             if pd.notna(valor):
                 valores.append(str(valor).strip().upper())
 
-        tiene_codigo = "EAN" in valores or "COD" in valores
-        tiene_dto = "DTO" in valores
-        tiene_inicio = "INICIO" in valores
-        tiene_fin = "FIN" in valores
+        # Busca cualquier variación posible de la columna de código
+        tiene_codigo = any(
+            x in valores for x in ["EAN", "COD", "COD DE BARRA", "COD. DE BARRA", "CODIGO", "CÓDIGO", "CODIGO DE BARRAS", "CÓDIGO DE BARRAS"]
+        )
+        tiene_dto = "DTO" in valores or "% DTO" in valores or "DESCUENTO" in valores
+        tiene_inicio = "INICIO" in valores or "DESDE" in valores
+        tiene_fin = "FIN" in valores or "HASTA" in valores
 
         if tiene_codigo and tiene_dto and tiene_inicio and tiene_fin:
             return numero_fila
@@ -162,19 +165,19 @@ def buscar_columnas(tabla, fila_encabezados):
 
         nombre = str(valor).strip().upper()
 
-        if nombre in ("EAN", "COD", "CODIGO", "CÓDIGO", "CODIGO DE BARRAS", "CÓDIGO DE BARRAS"):
+        if nombre in ("EAN", "COD", "COD DE BARRA", "COD. DE BARRA", "CODIGO", "CÓDIGO", "CODIGO DE BARRAS", "CÓDIGO DE BARRAS"):
             columnas["codigo"] = numero_columna
 
-        elif nombre in ("DESCRIPCION", "DESCRIPCIÓN"):
+        elif nombre in ("DESCRIPCION", "DESCRIPCIÓN", "DETALLE", "PRODUCTO"):
             columnas["descripcion"] = numero_columna
 
-        elif nombre == "DTO":
+        elif nombre in ("DTO", "% DTO", "DESCUENTO"):
             columnas["dto"] = numero_columna
 
-        elif nombre == "INICIO":
+        elif nombre in ("INICIO", "DESDE"):
             columnas["inicio"] = numero_columna
 
-        elif nombre == "FIN":
+        elif nombre in ("FIN", "HASTA"):
             columnas["fin"] = numero_columna
 
         elif nombre == "STOCK":
@@ -183,10 +186,10 @@ def buscar_columnas(tabla, fila_encabezados):
         elif nombre == "PRECIO DE VENTA":
             columnas["precio"] = numero_columna
 
-        elif nombre == "PROVEEDOR":
+        elif nombre in ("PROVEEDOR", "LABORATORIO", "LAB"):
             columnas["proveedor"] = numero_columna
 
-        elif nombre in ("LINEA", "LÍNEA"):
+        elif nombre in ("LINEA", "LÍNEA", "MARCA"):
             columnas["linea"] = numero_columna
 
     return columnas
@@ -204,6 +207,8 @@ def buscar_encabezados_stock(tabla):
         tiene_codigo = (
             "CODIGO DE BARRAS" in valores
             or "CÓDIGO DE BARRAS" in valores
+            or "EAN" in valores
+            or "COD DE BARRA" in valores
         )
 
         tiene_stock = "STOCK" in valores
