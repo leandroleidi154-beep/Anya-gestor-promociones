@@ -92,7 +92,6 @@ with tab_sucursal:
         key="uploader_stock"
     )
     
-    # SOLO SI EL USUARIO SUBIÓ UN ARCHIVO DE STOCK SE MUESTRA EL RESTO DE LA APP
     if archivo_stock_subido is not None:
         ruta_stock_temp = "temp_stock_sucursal.xlsx"
         with open(ruta_stock_temp, "wb") as f:
@@ -128,10 +127,9 @@ with tab_sucursal:
                         os.remove(ruta_promos_temp)
             else:
                 st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
-else:
+        else:
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    # Forzar headers de navegador para evitar bloqueos de Google
                     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
                     res = requests.get(URL_GOOGLE_DRIVE, headers=headers, allow_redirects=True)
                     
@@ -149,7 +147,7 @@ else:
             except Exception as e:
                 st.error(f"⚠️ Error al procesar las promociones desde Google Drive:\n\n`{e}`")
 
-        # MOSTRAR SECCIÓN 3 DE FILTROS Y PROCESAMIENTO ÚNICAMENTE SI SE CARGARON LAS PROMOS
+        # SECCIÓN 3 DE FILTROS
         if promociones_df is not None and not promociones_df.empty:
             st.divider()
             st.write("**3. Filtros opcionales**")
