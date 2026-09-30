@@ -1,139 +1,258 @@
-import streamlit as st
-import pandas as pd
-import requests
 import os
+import io
+import pandas as pd
+import streamlit as st
 
-# Importar funciones originales del proyecto
-from leer_stock import leer_stock
 from leer_promociones import leer_promociones
+from leer_stock import leer_stock
+from cruzar import cruzar_promociones_stock
+from formato import generar_excel
 
-# ---------------------------------------------------------
-# CONFIGURACIÓN DE PÁGINA
-# ---------------------------------------------------------
+# ============================================================
+# CONFIGURACIÓN DE RUTAS Y ENLACES DE GOOGLE DRIVE
+# ============================================================
+URL_GOOGLE_DRIVE = "https://drive.google.com/uc?export=download&id=1v_cUpBdva_MXc_CfXBThxnJvY6uweMVZ"
+
+DIRECTORIO_BASE = os.path.dirname(os.path.abspath(__file__))
+CARPETA_RECURSOS = os.path.join(DIRECTORIO_BASE, "recursos")
+
+def obtener_ruta_imagen(nombre_buscado):
+    if not os.path.exists(CARPETA_RECURSOS):
+        return None
+    for archivo in os.listdir(CARPETA_RECURSOS):
+        nombre_sin_ext, _ = os.path.splitext(archivo)
+        if nombre_sin_ext.lower().startswith(nombre_buscado.lower()):
+            return os.path.join(CARPETA_RECURSOS, archivo)
+    return None
+
+RUTA_LOGO = obtener_ruta_imagen("gata_logo")
+RUTA_PENSANDO = obtener_ruta_imagen("gata_pensando")
+RUTA_EXITO = obtener_ruta_imagen("gata_exito")
+RUTA_TRISTE = obtener_ruta_imagen("gata_triste")
+
+# Configuración de página
 st.set_page_config(
-    page_title="Generador de Reportes de Promociones",
-    page_icon="🐾",
-    layout="wide"
+    page_title="Gestor de Promociones - Farmacia del Pueblo",
+    page_icon=RUTA_LOGO if RUTA_LOGO else "💊",
+    layout="centered"
 )
 
-# Enlace directo de exportación para el archivo de Octubre
-URL_GOOGLE_DRIVE = "https://docs.google.com/spreadsheets/d/1jbd2kIlZ9MJaatJt2xPygj8MQxpXdELK/export?format=xlsx"
-
-def descargar_promociones_drive(url):
-    """
-    Descarga el archivo desde Google Drive a un archivo temporal local.
-    """
-    ruta_temp = "temp_promociones_octubre.xlsx"
-    try:
-        session = requests.Session()
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-        }
-        response = session.get(url, headers=headers, allow_redirects=True)
-        
-        with open(ruta_temp, "wb") as f:
-            f.write(response.content)
-            
-        return ruta_temp
-    except Exception as e:
-        st.error(f"Error al descargar promociones: {e}")
-        return None
-
-# ---------------------------------------------------------
-# INTERFAZ
-# ---------------------------------------------------------
-st.title("🐱 Generar reporte para Sucursal")
-
-tab1, tab2 = st.tabs(["🏢 Uso en Sucursal", "📢 Carga de Marketing"])
-
-with tab1:
-    st.markdown("### 1. Cargar archivo de Stock (.xlsx, .xls, .ods)")
+# Estilos CSS avanzados para ocultar la interfaz por defecto de Streamlit
+st.markdown("""
+    <style>
+    /* Ocultar barra superior (Header), botones de GitHub, Fork y menú de 3 puntos */
+    [data-testid="stHeader"],
+    header,
+    .stAppHeader {
+        display: none !important;
+    }
     
-    stock_file = st.file_uploader(
-        "Arrastrá o seleccioná el reporte de stock exportado del sistema",
-        type=["xlsx", "xls", "ods"],
-        key="stock_uploader"
-    )
-
-    stock_df = None
-    if stock_file is not None:
-        try:
-            # Solución al error 'UploadedFile': Guardar en un archivo temporal en disco
-            temp_stock_path = f"temp_{stock_file.name}"
-            with open(temp_stock_path, "wb") as f:
-                f.write(stock_file.getbuffer())
-
-            # Pasar la ruta física del archivo a leer_stock
-            stock_df = leer_stock(temp_stock_path)
-            
-            # Limpiar archivo temporal de stock
-            if os.path.exists(temp_stock_path):
-                os.remove(temp_stock_path)
-
-            if stock_df is not None and not stock_df.empty:
-                st.success(f"✅ Archivo de stock cargado correctamente ({len(stock_df)} filas).")
-            else:
-                st.warning("⚠️ El archivo de stock se leyó pero no contiene datos válidos.")
-
-        except Exception as e:
-            st.error(f"❌ Error al procesar el archivo de stock: {e}")
-
-    st.markdown("---")
-    st.markdown("### 2. Selección de Promociones")
-
-    usar_personalizado = st.checkbox("⚠️ Usar un archivo de promociones personalizado (solo para este cruce)")
+    /* Ocultar pie de página por defecto */
+    footer {
+        display: none !important;
+    }
     
-    promociones_df = None
+    /* Ocultar el botón rojo/blanco inferior de Streamlit Cloud y estado */
+    [data-testid="stStatusWidget"],
+    [data-testid="stViewerBadge"],
+    .stStatusWidget,
+    #stDecoration,
+    [data-testid="stDecoration"],
+    div[class*="viewerBadge"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
+    .stAppToolbar {
+        display: none !important;
+    }
 
-    if usar_personalizado:
-        promo_file = st.file_uploader(
-            "Cargar archivo de promociones propio (.xlsx)",
-            type=["xlsx"],
-            key="promo_uploader"
-        )
-        if promo_file is not None:
-            try:
-                temp_promo_custom = f"temp_custom_{promo_file.name}"
-                with open(temp_promo_custom, "wb") as f:
-                    f.write(promo_file.getbuffer())
+    /* Estilos del encabezado principal */
+    .main-header { font-size: 28px; font-weight: bold; color: #39476A; }
+    .sub-header { font-size: 15px; color: #888888; margin-bottom: 20px; }
+    div.stButton > button:first-child {
+        background-color: #39476A;
+        color: white;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #5B6598;
+        color: white;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-                promociones_df = leer_promociones(temp_promo_custom)
-
-                if os.path.exists(temp_promo_custom):
-                    os.remove(temp_promo_custom)
-
-                if promociones_df is not None and not promociones_df.empty:
-                    st.success(f"✅ Promociones personalizadas cargadas ({len(promociones_df)} registros).")
-            except Exception as e:
-                st.error(f"❌ Error al leer las promociones personalizadas: {e}")
+# Encabezado principal
+col_logo, col_titulo = st.columns([1.2, 3.8])
+with col_logo:
+    if RUTA_LOGO:
+        st.image(RUTA_LOGO, width=120)
     else:
-        # Descarga desde Google Drive usando archivo temporal
-        ruta_promo = descargar_promociones_drive(URL_GOOGLE_DRIVE)
+        st.write("💊")
+
+with col_titulo:
+    st.markdown('<div class="main-header">Farmacia del Pueblo</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-header">Gestor de Promociones | Cruce de listas con Stock local</div>', unsafe_allow_html=True)
+    st.markdown('<div style="font-size: 13px; font-weight: 500; color: #5B6598; margin-top: -15px; margin-bottom: 20px;">Creado por: Farm. Leandro Leidi</div>', unsafe_allow_html=True)
+
+# Pestañas
+tab_sucursal, tab_marketing = st.tabs(["🏬 Uso en Sucursal", "📢 Carga de Marketing"])
+
+# ============================================================
+# PESTAÑA 1: SUCURSALES
+# ============================================================
+with tab_sucursal:
+    st.subheader("Generar reporte para Sucursal")
+    
+    archivo_stock_subido = st.file_uploader(
+        "1. Cargar archivo de Stock (.xlsx, .xls, .ods)",
+        type=["xlsx", "xls", "ods"],
+        key="uploader_stock"
+    )
+    
+    if archivo_stock_subido is not None:
+        ruta_stock_temp = "temp_stock_sucursal.xlsx"
+        with open(ruta_stock_temp, "wb") as f:
+            f.write(archivo_stock_subido.getbuffer())
         
-        if ruta_promo and os.path.exists(ruta_promo):
+        st.divider()
+        st.subheader("2. Selección de Promociones")
+        
+        # Opción para usar promociones alternativas en la sesión local
+        usar_promos_personalizadas = st.checkbox(
+            "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
+            value=False
+        )
+        
+        promociones_df = None
+        
+        if usar_promos_personalizadas:
+            archivo_promos_subido = st.file_uploader(
+                "Cargar lista de promociones propia (.xlsx, .xls, .ods)",
+                type=["xlsx", "xls", "ods"],
+                key="uploader_promos_custom"
+            )
+            if archivo_promos_subido is not None:
+                ruta_promos_temp = "temp_promos_custom.xlsx"
+                with open(ruta_promos_temp, "wb") as f:
+                    f.write(archivo_promos_subido.getbuffer())
+                try:
+                    promociones_df = leer_promociones(ruta_promos_temp)
+                    st.info("ℹ️ Usando la lista de promociones subida manualmente.")
+                except Exception as e:
+                    st.error(f"Error al leer el archivo de promociones subido: {e}")
+                finally:
+                    if os.path.exists(ruta_promos_temp):
+                        os.remove(ruta_promos_temp)
+            else:
+                st.warning("Por favor, sube el archivo de promociones personalizado para continuar.")
+        else:
             try:
-                promociones_df = leer_promociones(ruta_promo)
-                if promociones_df is not None and not promociones_df.empty:
-                    st.info("ℹ️ Utilizando el archivo de promociones oficial de Octubre desde Google Drive.")
-                else:
-                    st.warning("⚠️ El archivo de promociones bajó, pero no se reconoció su estructura interna o nombres de hojas. Verificá los permisos del archivo en Google Drive.")
+                with st.spinner("Descargando base de promociones general desde Google Drive..."):
+                    promociones_df = leer_promociones(URL_GOOGLE_DRIVE)
             except Exception as e:
-                st.warning(f"⚠️ No se pudo procesar el archivo de promociones de Google Drive: {e}")
+                st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
 
-    # ---------------------------------------------------------
-    # 3. FILTROS Y PROCESAMIENTO FINAL
-    # ---------------------------------------------------------
-    if stock_df is not None and promociones_df is not None and not promociones_df.empty:
-        st.markdown("---")
-        st.markdown("### 3. Opciones de Filtro y Generación")
+        # Si tenemos un dataframe de promociones válido (sea de Drive o personalizado)
+        if promociones_df is not None and not promociones_df.empty:
+            st.divider()
+            st.write("**3. Filtros opcionales**")
+            
+            col_img_filtro, col_txt = st.columns([1, 2.5])
+            with col_img_filtro:
+                if RUTA_PENSANDO:
+                    st.image(RUTA_PENSANDO, caption="Filtrando...", width=160)
+            
+            with col_txt:
+                tipo_filtro = st.radio(
+                    "¿Cómo querés filtrar las promociones?",
+                    ["Mostrar todas", "Filtrar por Proveedor", "Filtrar por Línea", "Filtrar por Hoja"],
+                    horizontal=False
+                )
+            
+            promociones_filtradas = promociones_df.copy()
+            
+            if tipo_filtro == "Filtrar por Proveedor":
+                opciones = sorted([str(x) for x in promociones_df["Proveedor"].dropna().unique() if str(x).strip() != ""])
+                sel = st.multiselect("Seleccioná los proveedores:", opciones)
+                if sel:
+                    promociones_filtradas = promociones_df[promociones_df["Proveedor"].astype(str).isin(sel)]
+            
+            elif tipo_filtro == "Filtrar por Línea":
+                opciones = sorted([str(x) for x in promociones_df["Linea"].dropna().unique() if str(x).strip() != ""])
+                sel = st.multiselect("Seleccioná las líneas:", opciones)
+                if sel:
+                    promociones_filtradas = promociones_df[promociones_df["Linea"].astype(str).isin(sel)]
+                    
+            elif tipo_filtro == "Filtrar por Hoja":
+                opciones = sorted([str(x) for x in promociones_df["Hoja"].dropna().unique() if str(x).strip() != ""])
+                sel = st.multiselect("Seleccioná las hojas:", opciones)
+                if sel:
+                    promociones_filtradas = promociones_df[promociones_df["Hoja"].astype(str).isin(sel)]
 
-        # Restaurar imágenes si existen en la raíz de tu repositorio
-        if os.path.exists("gata.png"):
-            st.image("gata.png", width=150)
+           # --- CÓDIGO ACTUALIZADO EN app.py ---
+st.divider()
 
-        # Si en tu código original tenías filtros o cruce de datos, continúa aquí...
-        st.success("🎉 Datos listos para procesar.")
+# Opción para separar las hojas de control
+dividir_hojas_control = st.checkbox(
+    "📄 Separar las hojas de Control por cada hoja del Excel de Marketing",
+    value=False,
+    help="Si está marcado, creará una hoja 'Control - <Nombre>' por cada sección/hoja de marketing. Si no, generará una sola hoja 'Control'."
+)
 
-with tab2:
-    st.subheader("Carga y administración para el equipo de Marketing")
-    st.write("Esta sección está reservada para actualizar la base de datos principal de promociones.")
+if st.button("🚀 Procesar y Generar Reporte", use_container_width=True):
+    with st.spinner("Cruzando promociones con el stock..."):
+        stock_df = leer_stock(ruta_stock_temp)
+        resultado = cruzar_promociones_stock(promociones_filtradas, stock_df)
+    
+    if resultado.empty:
+        col_triste_txt, col_triste_img = st.columns([2.5, 1])
+        with col_triste_txt:
+            st.error("No se encontraron coincidencias para los productos de tu stock con la selección realizada.")
+        with col_triste_img:
+            if RUTA_TRISTE:
+                st.image(RUTA_TRISTE, width=160)
+    else:
+        col_exito_txt, col_exito_img = st.columns([2.5, 1])
+        with col_exito_txt:
+            st.success("¡Cruce realizado con éxito!")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Promociones", len(resultado))
+            
+            vencidas = (resultado["Estado"] == "VENCIDA").sum() if "Estado" in resultado.columns else 0
+            vence_manana = (resultado["Estado"] == "VENCE MAÑANA").sum() if "Estado" in resultado.columns else 0
+            duplicados = (resultado["Revisar duplicado"] == "SI").sum() if "Revisar duplicado" in resultado.columns else 0
+            
+            col2.metric("Vencidas", vencidas)
+            col3.metric("Vencen Mañana", vence_manana)
+            col4.metric("Duplicadas", duplicados)
+            
+        with col_exito_img:
+            if RUTA_EXITO:
+                st.image(RUTA_EXITO, caption="¡Promos encontradas!", width=160)
+        
+        output = io.BytesIO()
+        # Se pasa el argumento 'dividir_control' configurado desde la interfaz
+        generar_excel(resultado, output, dividir_control=dividir_hojas_control)
+        bytes_excel = output.getvalue()
+        
+        st.download_button(
+            label="📥 Descargar Reporte en Excel (.xlsx)",
+            data=bytes_excel,
+            file_name="Promociones_en_Stock.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
+
+        if os.path.exists(ruta_stock_temp):
+            os.remove(ruta_stock_temp)
+
+# ============================================================
+# PESTAÑA 2: INFORMACIÓN DE MARKETING
+# ============================================================
+with tab_marketing:
+    st.subheader("Origen de Datos Central")
+    st.info("ℹ️ La aplicación lee las promociones por defecto directamente desde la carpeta de Google Drive.")
+    st.write("Cada vez que el equipo de Marketing reemplace o edite este archivo en Google Drive, todas las sucursales verán la información actualizada sin necesidad de reiniciar la web.")
