@@ -32,22 +32,18 @@ RUTA_PENSANDO = obtener_ruta_imagen("gata_pensando")
 RUTA_EXITO = obtener_ruta_imagen("gata_exito")
 RUTA_TRISTE = obtener_ruta_imagen("gata_triste")
 
-def descargar_excel_drive(url):
-    """Descarga el archivo de Google Drive a un archivo local temporal."""
+def descargar_excel_drive(id_drive):
+    """Descarga directamente la planilla de Google Drive usando la API de exportación."""
+    url = f"https://docs.google.com/spreadsheets/d/{id_drive}/export?format=xlsx"
     session = requests.Session()
-    response = session.get(url, stream=True)
+    response = session.get(url, allow_redirects=True)
     
-    # Manejo de confirmación de descarga de archivos en Drive
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            response = session.get(f"{url}&confirm={value}", stream=True)
-            break
-            
+    if response.status_code != 200:
+        raise ValueError(f"Google Drive respondió con código {response.status_code}. Verifica los permisos de acceso público.")
+        
     ruta_temp = "temp_promos_drive.xlsx"
     with open(ruta_temp, "wb") as f:
-        for chunk in response.iter_content(chunk_size=32768):
-            if chunk:
-                f.write(chunk)
+        f.write(response.content)
     return ruta_temp
 
 # Configuración de página
@@ -119,7 +115,7 @@ with tab_sucursal:
         st.subheader("2. Selección de Promociones")
         
         usar_promos_personalizadas = st.checkbox(
-            "⚠️️ Usar un archivo de promociones personalizado (solo para este cruce)",
+            "⚠️ Usar un archivo de promociones personalizado (solo para este cruce)",
             value=False
         )
         
@@ -148,14 +144,19 @@ with tab_sucursal:
         else:
             try:
                 with st.spinner("Descargando base de promociones general desde Google Drive..."):
-                    ruta_promos_drive = descargar_excel_drive(URL_GOOGLE_DRIVE)
+                    ruta_promos_drive = descargar_excel_drive(ID_DRIVE)
                     promociones_df = leer_promociones(ruta_promos_drive)
                     if os.path.exists(ruta_promos_drive):
                         os.remove(ruta_promos_drive)
             except Exception as e:
-                st.error(f"⚠️ No se pudo obtener la lista de promociones desde Google Drive. Detalles: {e}")
+                col_err_txt, col_err_img = st.columns([2.5, 1])
+                with col_err_txt:
+                    st.error(f"⚠️ Error al obtener las promociones desde Google Drive:\n\n{e}")
+                with col_err_img:
+                    if RUTA_TRISTE:
+                        st.image(RUTA_TRISTE, width=150)
 
-        # Si las promociones se cargaron bien, mostramos los filtros y el botón de generar
+        # Si las promociones se cargaron bien, mostramos los filtros y el botón
         if promociones_df is not None and not promociones_df.empty:
             st.divider()
             st.write("**3. Filtros opcionales**")
