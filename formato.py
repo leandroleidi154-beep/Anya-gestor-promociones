@@ -17,19 +17,13 @@ def generar_excel(resultado, archivo_salida, dividir_control=False):
     Siempre incluye la hoja "Promociones en Stock" (el listado completo,
     con la marca de "Control"/duplicado si corresponde).
 
-    Para la parte de Control, pensada para imprimir y que el repositor
+    Para la parte de Control, pensada para imprimir y que le repositor
     vaya tildando a medida que coloca cada cartel, hay dos modos:
 
     - dividir_control=False (default): una única hoja "Control" con
       todas las promociones juntas.
     - dividir_control=True: una hoja "Control - <nombre>" por cada
-      hoja del Excel de marketing en la que aparecía la promoción
-      (ej. "Control - CVMH", "Control - LAVANDINA LOREAL"). Si un
-      mismo producto tenía promo en más de una hoja de marketing,
-      aparece en cada una de esas hojas de Control.
-
-    En ningún caso las hojas de Control muestran la leyenda de
-    "duplicado": esa marca es solo para la hoja principal.
+      hoja del Excel de marketing en la que aparecía la promoción.
     """
 
     libro = openpyxl.Workbook()
@@ -39,7 +33,7 @@ def generar_excel(resultado, archivo_salida, dividir_control=False):
     if dividir_control:
         _armar_hojas_control_divididas(libro, resultado)
     else:
-        _armar_hoja_control(libro, "Control", resultado)
+        _armar_hoja_control(libro, "Control", resultado, titulo_personalizado="CONTROL GENERAL DE PROMOCIONES")
 
     libro.save(archivo_salida)
 
@@ -107,26 +101,42 @@ def _armar_hoja_principal(libro, resultado):
 # HOJA 2: CONTROL (para imprimir y tildar en el local)
 # ============================================================
 
-def _armar_hoja_control(libro, nombre_hoja, datos):
+def _armar_hoja_control(libro, nombre_hoja, datos, titulo_personalizado=None):
     """
     Arma una hoja de Control (para imprimir y tildar) con los datos
-    recibidos. Se usa tanto para la hoja única "Control" como para
-    cada una de las hojas divididas por hoja de marketing.
-
-    Nunca incluye la marca de "duplicado": esa leyenda es exclusiva
-    de la hoja principal "Promociones en Stock".
+    recibidos. Inserta una fila de título institucional arriba con
+    el nombre de la sección correspondiente.
     """
 
     hoja = libro.create_sheet(nombre_hoja)
 
+    # 1. Insertar título destacado en la fila 1
+    hoja.merge_cells("A1:J1")
+    celda_titulo = hoja.cell(1, 1)
+    
+    if not titulo_personalizado:
+        titulo_personalizado = f"CONTROL DE PROMOCIONES - {nombre_hoja.replace('Control - ', '').upper()}"
+        
+    celda_titulo.value = titulo_personalizado
+    celda_titulo.font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+    
+    relleno_titulo = PatternFill(start_color="39476A", end_color="39476A", fill_type="solid")
+    celda_titulo.fill = relleno_titulo
+    celda_titulo.alignment = Alignment(horizontal="center", vertical="center")
+    hoja.row_dimensions[1].height = 25
+
+    # Fila vacía de separación (fila 2)
+    hoja.row_dimensions[2].height = 10
+
+    # 2. Agregar encabezados de la tabla a partir de la fila 3
     encabezados = [
         "Línea", "Descripción", "Código de Barras", "Stock",
         "Promoción", "Precio de Venta", "Inicio", "Fin", "Vigencia", "Control"
     ]
-    hoja.append(encabezados)
+    hoja.append(encabezados) # Esto se ubicará en la fila 3
+    hoja.row_dimensions[3].height = 22
 
-    # Ordenado por Línea y Descripción, para que sea más fácil
-    # recorrer la farmacia por marca/sector.
+    # 3. Insertar los datos de las promociones a partir de la fila 4
     datos_ordenados = datos.sort_values(["Linea", "Descripción"])
 
     for _, fila in datos_ordenados.iterrows():
@@ -143,27 +153,26 @@ def _armar_hoja_control(libro, nombre_hoja, datos):
             ""  # columna en blanco para tildar a mano
         ])
 
-    _dar_estilo_encabezado(hoja)
+    _dar_estilo_encabezado_fila(hoja, fila_num=3)
 
     columna_precio = 6
     columna_vigencia = 9
     columna_control = 10
 
-    _resaltar_por_estado(hoja, columna_vigencia)
-    _formato_moneda(hoja, columna_precio)
+    _resaltar_por_estado_desde_fila(hoja, columna_vigencia, fila_inicio=4)
+    _formato_moneda_desde_fila(hoja, columna_precio, fila_inicio=4)
 
-    # Cuadrícula completa en toda la tabla, para que sea más fácil
-    # de seguir con la vista al imprimir y tildar a mano.
+    # Cuadrícula completa en toda la tabla
     borde = Border(
         left=Side(style="thin"), right=Side(style="thin"),
         top=Side(style="thin"), bottom=Side(style="thin")
     )
 
-    for fila in range(1, hoja.max_row + 1):
+    for fila in range(3, hoja.max_row + 1):
         for columna in range(1, hoja.max_column + 1):
             hoja.cell(fila, columna).border = borde
 
-    for fila in range(2, hoja.max_row + 1):
+    for fila in range(4, hoja.max_row + 1):
         celda_control = hoja.cell(fila, columna_control)
         celda_control.alignment = Alignment(horizontal="center")
         hoja.row_dimensions[fila].height = 20
@@ -175,9 +184,22 @@ def _armar_hoja_control(libro, nombre_hoja, datos):
     for letra, ancho in anchos.items():
         hoja.column_dimensions[letra].width = ancho
 
-    hoja.freeze_panes = "A2"
+    # Inmovilizar paneles debajo de los encabezados (fila 3)
+    hoja.freeze_panes = "A4"
 
-    _configurar_impresion(hoja)
+    # Configurar impresión repitiendo la fila 3 como título en cada hoja impresa
+    hoja.page_setup.orientation = "landscape"
+    hoja.page_setup.fitToWidth = 1
+    hoja.page_setup.fitToHeight = 0
+    hoja.sheet_properties.pageSetUpPr.fitToPage = True
+    hoja.print_title_rows = "3:3"
+
+    hoja.page_margins.left = 0.4
+    hoja.page_margins.right = 0.4
+    hoja.page_margins.top = 0.5
+    hoja.page_margins.bottom = 0.5
+    hoja.page_margins.header = 0.2
+    hoja.page_margins.footer = 0.2
 
 
 # Caracteres que Excel no permite en un nombre de hoja.
@@ -187,9 +209,7 @@ _CARACTERES_INVALIDOS_NOMBRE_HOJA = ["\\", "/", "*", "[", "]", ":", "?"]
 def _nombre_hoja_control(nombre_hoja_marketing, nombres_ya_usados):
     """
     Arma el nombre "Control - <hoja de marketing>", sacando caracteres
-    que Excel no permite en un nombre de hoja y respetando el límite
-    de 31 caracteres. Si dos hojas de marketing generan el mismo
-    nombre recortado, le agrega un número al final para no pisarlas.
+    que Excel no permite y respetando el límite de 31 caracteres.
     """
 
     nombre_base = str(nombre_hoja_marketing).strip() or "Sin nombre"
@@ -212,10 +232,7 @@ def _nombre_hoja_control(nombre_hoja_marketing, nombres_ya_usados):
 
 def _armar_hojas_control_divididas(libro, resultado):
     """
-    Genera una hoja "Control - <hoja de marketing>" por cada hoja del
-    Excel de marketing que tuvo coincidencias en stock. Si un mismo
-    producto tenía promoción en más de una hoja de marketing (caso de
-    "duplicado"), aparece en cada una de esas hojas de Control.
+    Genera una hoja de Control por cada hoja del Excel de marketing.
     """
 
     nombres_ya_usados = set()
@@ -232,7 +249,13 @@ def _armar_hojas_control_divididas(libro, resultado):
             continue
 
         nombre_hoja_excel = _nombre_hoja_control(hoja_marketing, nombres_ya_usados)
-        _armar_hoja_control(libro, nombre_hoja_excel, datos_de_esta_hoja)
+        # Pasamos explícitamente el título para la cabecera interna de la hoja
+        _armar_hoja_control(
+            libro, 
+            nombre_hoja_excel, 
+            datos_de_esta_hoja, 
+            titulo_personalizado=f"CONTROL DE PROMOCIONES - SECCIÓN: {str(hoja_marketing).upper()}"
+        )
 
 
 # ============================================================
@@ -240,13 +263,6 @@ def _armar_hojas_control_divididas(libro, resultado):
 # ============================================================
 
 def _configurar_impresion(hoja):
-    """
-    Deja la hoja lista para imprimir en una impresora normal (A4):
-    orientación horizontal, ajustada al ancho de la página, con
-    la fila de encabezados repetida en cada página impresa.
-    Funciona igual en Excel y en LibreOffice Calc.
-    """
-
     hoja.page_setup.orientation = "landscape"
     hoja.page_setup.fitToWidth = 1
     hoja.page_setup.fitToHeight = 0
@@ -262,7 +278,6 @@ def _configurar_impresion(hoja):
 
 
 def _dar_estilo_encabezado(hoja):
-
     relleno = PatternFill(
         start_color=COLOR_ENCABEZADO,
         end_color=COLOR_ENCABEZADO,
@@ -275,8 +290,24 @@ def _dar_estilo_encabezado(hoja):
         celda.alignment = Alignment(horizontal="center", vertical="center")
 
 
-def _resaltar_por_estado(hoja, columna_estado):
+def _dar_estilo_encabezado_fila(hoja, fila_num):
+    relleno = PatternFill(
+        start_color=COLOR_ENCABEZADO,
+        end_color=COLOR_ENCABEZADO,
+        fill_type="solid"
+    )
 
+    for celda in hoja[fila_num]:
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = relleno
+        celda.alignment = Alignment(horizontal="center", vertical="center")
+
+
+def _resaltar_por_estado(hoja, columna_estado):
+    _resaltar_por_estado_desde_fila(hoja, columna_estado, fila_inicio=2)
+
+
+def _resaltar_por_estado_desde_fila(hoja, columna_estado, fila_inicio):
     if columna_estado is None:
         return
 
@@ -290,8 +321,7 @@ def _resaltar_por_estado(hoja, columna_estado):
         start_color=COLOR_PROXIMAMENTE, end_color=COLOR_PROXIMAMENTE, fill_type="solid"
     )
 
-    for fila in range(2, hoja.max_row + 1):
-
+    for fila in range(fila_inicio, hoja.max_row + 1):
         valor = hoja.cell(fila, columna_estado).value
 
         if valor == "VENCIDA":
@@ -308,7 +338,6 @@ def _resaltar_por_estado(hoja, columna_estado):
 
 
 def _resaltar_duplicados(hoja, columna_duplicado):
-
     if columna_duplicado is None:
         return
 
@@ -318,12 +347,13 @@ def _resaltar_duplicados(hoja, columna_duplicado):
 
     for fila in range(2, hoja.max_row + 1):
         if hoja.cell(fila, columna_duplicado).value == "SI":
-            # Solo pintamos la celda de "Revisar duplicado" para no tapar
-            # el color de Estado (vencida/vence mañana), que es más importante.
             hoja.cell(fila, columna_duplicado).fill = relleno
 
 
 def _formato_moneda(hoja, columna_precio):
+    _formato_moneda_desde_fila(hoja, columna_precio, fila_inicio=2)
 
-    for fila in range(2, hoja.max_row + 1):
+
+def _formato_moneda_desde_fila(hoja, columna_precio, fila_inicio):
+    for fila in range(fila_inicio, hoja.max_row + 1):
         hoja.cell(fila, columna_precio).number_format = '$#,##0.00'
