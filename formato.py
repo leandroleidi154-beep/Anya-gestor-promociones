@@ -13,19 +13,7 @@ COLOR_PROXIMAMENTE = "D9E1F2"  # celeste suave
 def generar_excel(resultado, archivo_salida, dividir_control=False):
     """
     Recibe el DataFrame ya cruzado (resultado) y genera el Excel final.
-
-    Siempre incluye la hoja "Promociones en Stock" (el listado completo,
-    con la marca de "Control"/duplicado si corresponde).
-
-    Para la parte de Control, pensada para imprimir y que le repositor
-    vaya tildando a medida que coloca cada cartel, hay dos modos:
-
-    - dividir_control=False (default): una única hoja "Control" con
-      todas las promociones juntas.
-    - dividir_control=True: una hoja "Control - <nombre>" por cada
-      hoja del Excel de marketing en la que aparecía la promoción.
     """
-
     libro = openpyxl.Workbook()
 
     _armar_hoja_principal(libro, resultado)
@@ -43,11 +31,9 @@ def generar_excel(resultado, archivo_salida, dividir_control=False):
 # ============================================================
 
 def _armar_hoja_principal(libro, resultado):
-
     hoja = libro.active
     hoja.title = "Promociones en Stock"
 
-    # Orden y nombres de columnas para esta hoja
     columnas = [
         ("Linea", "Línea"),
         ("Descripción", "Descripción"),
@@ -73,7 +59,6 @@ def _armar_hoja_principal(libro, resultado):
 
     _dar_estilo_encabezado(hoja)
 
-    # Ubicar columnas clave por nombre (por si el orden cambia en el futuro)
     posiciones = {nombre: i + 1 for i, (_, nombre) in enumerate(columnas)}
 
     _resaltar_por_estado(hoja, posiciones.get("Estado"))
@@ -93,7 +78,6 @@ def _armar_hoja_principal(libro, resultado):
         hoja.column_dimensions[letra].width = ancho
 
     hoja.freeze_panes = "A2"
-
     _configurar_impresion(hoja)
 
 
@@ -102,15 +86,9 @@ def _armar_hoja_principal(libro, resultado):
 # ============================================================
 
 def _armar_hoja_control(libro, nombre_hoja, datos, titulo_personalizado=None):
-    """
-    Arma una hoja de Control (para imprimir y tildar) con los datos
-    recibidos. Inserta una fila de título institucional arriba con
-    el nombre de la sección correspondiente.
-    """
-
     hoja = libro.create_sheet(nombre_hoja)
 
-    # 1. Insertar título destacado en la fila 1
+    # 1. Título institucional en la Fila 1 (Combinado de A1 hasta J1)
     hoja.merge_cells("A1:J1")
     celda_titulo = hoja.cell(1, 1)
     
@@ -125,35 +103,36 @@ def _armar_hoja_control(libro, nombre_hoja, datos, titulo_personalizado=None):
     celda_titulo.alignment = Alignment(horizontal="center", vertical="center")
     hoja.row_dimensions[1].height = 25
 
-    # Fila vacía de separación (fila 2)
+    # 2. Fila 2 de separación (vacía y finita)
     hoja.row_dimensions[2].height = 10
 
-    # 2. Agregar encabezados de la tabla a partir de la fila 3
+    # 3. Encabezados de la tabla exactamente en la Fila 3
     encabezados = [
         "Línea", "Descripción", "Código de Barras", "Stock",
         "Promoción", "Precio de Venta", "Inicio", "Fin", "Vigencia", "Control"
     ]
-    hoja.append(encabezados) # Esto se ubicará en la fila 3
+    for col_idx, enc in enumerate(encabezados, start=1):
+        hoja.cell(row=3, column=col_idx, value=enc)
+    
     hoja.row_dimensions[3].height = 22
+    _dar_estilo_encabezado_fila(hoja, fila_num=3)
 
-    # 3. Insertar los datos de las promociones a partir de la fila 4
+    # 4. Inserción de datos a partir de la Fila 4
     datos_ordenados = datos.sort_values(["Linea", "Descripción"])
+    fila_actual = 4
 
     for _, fila in datos_ordenados.iterrows():
-        hoja.append([
-            fila["Linea"],
-            fila["Descripción"],
-            fila["Código de Barras"],
-            fila["Stock"],
-            fila["DTO"],
-            fila["Precio de Venta"],
-            fila["Inicio"],
-            fila["Fin"],
-            fila["Estado"],
-            ""  # columna en blanco para tildar a mano
-        ])
-
-    _dar_estilo_encabezado_fila(hoja, fila_num=3)
+        hoja.cell(row=fila_actual, column=1, value=fila["Linea"])
+        hoja.cell(row=fila_actual, column=2, value=fila["Descripción"])
+        hoja.cell(row=fila_actual, column=3, value=fila["Código de Barras"])
+        hoja.cell(row=fila_actual, column=4, value=fila["Stock"])
+        hoja.cell(row=fila_actual, column=5, value=fila["DTO"])
+        hoja.cell(row=fila_actual, column=6, value=fila["Precio de Venta"])
+        hoja.cell(row=fila_actual, column=7, value=fila["Inicio"])
+        hoja.cell(row=fila_actual, column=8, value=fila["Fin"])
+        hoja.cell(row=fila_actual, column=9, value=fila["Estado"])
+        hoja.cell(row=fila_actual, column=10, value="")
+        fila_actual += 1
 
     columna_precio = 6
     columna_vigencia = 9
@@ -162,7 +141,7 @@ def _armar_hoja_control(libro, nombre_hoja, datos, titulo_personalizado=None):
     _resaltar_por_estado_desde_fila(hoja, columna_vigencia, fila_inicio=4)
     _formato_moneda_desde_fila(hoja, columna_precio, fila_inicio=4)
 
-    # Cuadrícula completa en toda la tabla
+    # Cuadrícula completa desde la fila 3 en adelante
     borde = Border(
         left=Side(style="thin"), right=Side(style="thin"),
         top=Side(style="thin"), bottom=Side(style="thin")
@@ -187,7 +166,7 @@ def _armar_hoja_control(libro, nombre_hoja, datos, titulo_personalizado=None):
     # Inmovilizar paneles debajo de los encabezados (fila 3)
     hoja.freeze_panes = "A4"
 
-    # Configurar impresión repitiendo la fila 3 como título en cada hoja impresa
+    # Configuración de impresión repitiendo la fila 3 como cabecera
     hoja.page_setup.orientation = "landscape"
     hoja.page_setup.fitToWidth = 1
     hoja.page_setup.fitToHeight = 0
@@ -207,11 +186,6 @@ _CARACTERES_INVALIDOS_NOMBRE_HOJA = ["\\", "/", "*", "[", "]", ":", "?"]
 
 
 def _nombre_hoja_control(nombre_hoja_marketing, nombres_ya_usados):
-    """
-    Arma el nombre "Control - <hoja de marketing>", sacando caracteres
-    que Excel no permite y respetando el límite de 31 caracteres.
-    """
-
     nombre_base = str(nombre_hoja_marketing).strip() or "Sin nombre"
 
     for caracter in _CARACTERES_INVALIDOS_NOMBRE_HOJA:
@@ -231,10 +205,6 @@ def _nombre_hoja_control(nombre_hoja_marketing, nombres_ya_usados):
 
 
 def _armar_hojas_control_divididas(libro, resultado):
-    """
-    Genera una hoja de Control por cada hoja del Excel de marketing.
-    """
-
     nombres_ya_usados = set()
 
     hojas_marketing = sorted(
@@ -249,7 +219,6 @@ def _armar_hojas_control_divididas(libro, resultado):
             continue
 
         nombre_hoja_excel = _nombre_hoja_control(hoja_marketing, nombres_ya_usados)
-        # Pasamos explícitamente el título para la cabecera interna de la hoja
         _armar_hoja_control(
             libro, 
             nombre_hoja_excel, 
@@ -278,12 +247,7 @@ def _configurar_impresion(hoja):
 
 
 def _dar_estilo_encabezado(hoja):
-    relleno = PatternFill(
-        start_color=COLOR_ENCABEZADO,
-        end_color=COLOR_ENCABEZADO,
-        fill_type="solid"
-    )
-
+    relleno = PatternFill(start_color=COLOR_ENCABEZADO, end_color=COLOR_ENCABEZADO, fill_type="solid")
     for celda in hoja[1]:
         celda.font = Font(bold=True, color="FFFFFF")
         celda.fill = relleno
@@ -291,12 +255,7 @@ def _dar_estilo_encabezado(hoja):
 
 
 def _dar_estilo_encabezado_fila(hoja, fila_num):
-    relleno = PatternFill(
-        start_color=COLOR_ENCABEZADO,
-        end_color=COLOR_ENCABEZADO,
-        fill_type="solid"
-    )
-
+    relleno = PatternFill(start_color=COLOR_ENCABEZADO, end_color=COLOR_ENCABEZADO, fill_type="solid")
     for celda in hoja[fila_num]:
         celda.font = Font(bold=True, color="FFFFFF")
         celda.fill = relleno
@@ -311,15 +270,9 @@ def _resaltar_por_estado_desde_fila(hoja, columna_estado, fila_inicio):
     if columna_estado is None:
         return
 
-    relleno_vencida = PatternFill(
-        start_color=COLOR_VENCIDA, end_color=COLOR_VENCIDA, fill_type="solid"
-    )
-    relleno_manana = PatternFill(
-        start_color=COLOR_VENCE_MANANA, end_color=COLOR_VENCE_MANANA, fill_type="solid"
-    )
-    relleno_proximamente = PatternFill(
-        start_color=COLOR_PROXIMAMENTE, end_color=COLOR_PROXIMAMENTE, fill_type="solid"
-    )
+    relleno_vencida = PatternFill(start_color=COLOR_VENCIDA, end_color=COLOR_VENCIDA, fill_type="solid")
+    relleno_manana = PatternFill(start_color=COLOR_VENCE_MANANA, end_color=COLOR_VENCE_MANANA, fill_type="solid")
+    relleno_proximamente = PatternFill(start_color=COLOR_PROXIMAMENTE, end_color=COLOR_PROXIMAMENTE, fill_type="solid")
 
     for fila in range(fila_inicio, hoja.max_row + 1):
         valor = hoja.cell(fila, columna_estado).value
@@ -341,10 +294,7 @@ def _resaltar_duplicados(hoja, columna_duplicado):
     if columna_duplicado is None:
         return
 
-    relleno = PatternFill(
-        start_color=COLOR_DUPLICADO, end_color=COLOR_DUPLICADO, fill_type="solid"
-    )
-
+    relleno = PatternFill(start_color=COLOR_DUPLICADO, end_color=COLOR_DUPLICADO, fill_type="solid")
     for fila in range(2, hoja.max_row + 1):
         if hoja.cell(fila, columna_duplicado).value == "SI":
             hoja.cell(fila, columna_duplicado).fill = relleno
