@@ -16,4 +16,4 @@ jobs:
 
       - name: Enviar visita
         run: |
-          python -c "import urllib.request; urllib.request.urlopen('https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app/')" || true
+          python -c "import urllib.request; urllib.request.urlopen('https://anya-gestor-promociones-n8sxjsw9o5vyvz4hih7qhh.streamlit.app/#origen-de-datos-central')" || true
